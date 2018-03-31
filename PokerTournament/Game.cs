@@ -188,6 +188,8 @@ namespace PokerTournament
             playerOrder[0].Hand = deck.Deal(5);
             playerOrder[1].Hand = deck.Deal(5);
 
+            ResultWriter(Evaluate.ListHand(p0.Hand));
+
             // round 1 of betting - loop until both players check,
             // one folds, or one calls
             ResultWriter("Betting round 1:");

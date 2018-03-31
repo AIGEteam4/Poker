@@ -51,7 +51,7 @@ namespace PokerTournament
 
             confidence = GetHandConfidence();//Get confidence for current hand
 
-            int maxBet = (int)(GetMaxBet() * confidence);//Maximum amt we're willing to bet... This probably isn't a good option right now
+            //int maxBet = (int)(GetMaxBet() * confidence);//Maximum amt we're willing to bet... This probably isn't a good option right now
 
             //If they're going first, get their action so we can factor that in
             //Can call, raise, or fold
@@ -77,12 +77,12 @@ namespace PokerTournament
                     currentRound.AddOpponentBet(oppBetAmt);
 
                     //How much have they bet? Would the amount of money we'd have to pay to match them be worth the risk?
-                    float potOdds = GetPotOdds();
+                    float potOdds = GetPotOdds(oppBetAmt);
 
                     //If we don't have enough money to match, fold
                     //Otherwise, if the pot odds are bad and our confidence is low, randomly decide whether we're going to fold based on confidence
                     //Lower confidence = more likely to fold
-                    if (oppBetAmt > Money || (potOdds < confidence && rand.NextDouble() > confidence))
+                    if (oppBetAmt > Money || (potOdds - confidence > 0.5f && rand.NextDouble() > confidence))
                     {
                         return new PlayerAction(Name, "Bet1", "fold", 0);
                     }
@@ -120,7 +120,7 @@ namespace PokerTournament
                         //Varies based on confidence rating
                         int betAmt = GetAmountToBet();
 
-                        return new PlayerAction(Name, "Bet1", "raise", betAmt);
+                        return new PlayerAction(Name, "Bet1", "bet", betAmt);
                     }
                 }
             }
@@ -156,19 +156,94 @@ namespace PokerTournament
         //Implemented by Mark Scott
         public override PlayerAction BettingRound2(List<PlayerAction> actions, Card[] hand)
         {
-             //first guess the opponents hand based on the number of cards they discarded (only once)
-            if (firstTurn)
+            //if(actions.Last().ActionPhase.Equals())
+
+            PlayerAction lastOpponentAction = actions.Last();
+
+            if (lastOpponentAction.ActionPhase.Equals("Bet2"))
             {
-                actionCount = actions.Count - 1;
-                oppDiscards = GetOpponentDiscards(actions);
-                EvaluateOpponentsHand(); // sets firstTurn to false
+                if (actions.Count <= 1)
+                {
+                    NewRound();
+                }
+
+                int oppBetAmt = 0;//How much opponent just bet
+
+                //If the opponent bet/raised, determine whether to call, raise, or fold
+                //Calling will end the betting round
+                //Raising will send it back around to the opponent
+                //Folding will obviously mean we lose
+                if (lastOpponentAction.ActionName == "bet" || lastOpponentAction.ActionName == "raise")
+                {
+                    oppBetAmt = lastOpponentAction.Amount;
+                    opponentMoney -= oppBetAmt;
+                    currentRound.AddOpponentBet(oppBetAmt);
+
+                    //How much have they bet? Would the amount of money we'd have to pay to match them be worth the risk?
+                    float potOdds = GetPotOdds(oppBetAmt);
+
+                    //If we don't have enough money to match, fold
+                    //Otherwise, if the pot odds are bad and our confidence is low, randomly decide whether we're going to fold based on confidence
+                    //Lower confidence = more likely to fold
+                    if (oppBetAmt > Money || (potOdds - confidence > 0.5f && rand.NextDouble() > confidence))
+                    {
+                        return new PlayerAction(Name, "Bet2", "fold", 0);
+                    }
+                    //We're staying in! Random chance of only calling based on confidence
+                    else if (rand.NextDouble() > confidence)
+                    {
+                        return new PlayerAction(Name, "Bet2", "call", 0);
+                    }
+                    //If not folding or calling, raise
+                    else
+                    {
+                        //Get amount to raise by as random number between 0 and absolute max of 25
+                        //Varies based on confidence rating
+                        int betAmt = GetAmountToBet();
+
+                        return new PlayerAction(Name, "Bet2", "raise", betAmt);
+                    }
+                }
+                //The only other option is that they're checking
+                else//opponentAction.ActionName == "check"
+                {
+                    //Definitely don't fold! Decide whether to check as well or raise
+                    if (rand.NextDouble() > confidence)
+                    {
+                        return new PlayerAction(Name, "Bet2", "check", 0);
+                    }
+                    //If not folding or calling, raise
+                    else
+                    {
+                        //Get amount to raise by as random number between 0 and absolute max of 25
+                        //Varies based on confidence rating
+                        int betAmt = GetAmountToBet();
+
+                        return new PlayerAction(Name, "Bet2", "bet", betAmt);
+                    }
+                }
             }
+            //If we're going first, will have to base decision entirely off of hand strength
+            //Can check, bet, or fold
+            else
+            {
+                NewRound();//Start new round
 
-            //combine knowledge of opponents hand with knowledge of your own hand
+                //Determine what to do, we're going first
+                if (rand.NextDouble() > confidence)
+                {
+                    return new PlayerAction(Name, "Bet2", "check", 0);
+                }
+                //If not folding or checking, bet
+                //Get amount to bet as random number between 0 and absolute max of 25
+                //Varies based on confidence rating
+                else
+                {
+                    int betAmt = GetAmountToBet();
 
-            //reuse Bet1 logic
-
-            return new PlayerAction(Name, "Bet2", "bet", 10);//Placeholder
+                    return new PlayerAction(Name, "Bet2", "bet", betAmt);
+                }
+            }
         }
         
          private int GetOpponentDiscards(List<PlayerAction> actions)
@@ -211,13 +286,6 @@ namespace PokerTournament
             firstTurn = false;
         }
 
-        //Calculate maximum amt we're willing to bet this round
-        //As it is right now, I don't think this is a great solution
-        private int GetMaxBet()
-        {
-            return Money / 15 - currentRound.PlayerBetAmt;
-        }
-
         //Randomly determine what to bet based on confidence
         private int GetAmountToBet()
         {
@@ -230,6 +298,8 @@ namespace PokerTournament
         {
             Card highCard;
 
+            int r = Evaluate.RateAHand(Hand, out highCard) - 1;
+
             //Clamp rating to value btwn 0-4
             //0 is high card, 4 is a straight or better - we treat 4+ hands all functionally the same since they're all such insanely rare/good hands
             int rating = Math.Min(Evaluate.RateAHand(Hand, out highCard) - 1, 4);
@@ -240,7 +310,7 @@ namespace PokerTournament
             //Maximum confidence possible for a high card is 50%
             if(rating <= 1)
             {
-                conf *= (highCard.Value-1) / 13;
+                conf *= (float)(highCard.Value-1) / 13;
             }
 
             //If we have pairs, modify confidence by the strength of these pairs
@@ -262,13 +332,13 @@ namespace PokerTournament
 
             //Check for pairs within cards and increase strength based on value of any pairs found
             //Since they're pre-sorted we know pairs will be right next to each other in a hand
-            for(int i = 0; i < 5; ++i)
+            for(int i = 0; i < 4; ++i)
             {
                 if(Hand[i].Value == Hand[i+1].Value)
                 {
                     //Strength of pair is determined by value where 2 is worth ~0.076 and A is worth 1
                     //If we're evaluating a two pair then get average strength of them both
-                    strength += (Hand[i++].Value-1) / (13 * numPairs);
+                    strength += (float)(Hand[i++].Value-1) / (13 * numPairs);
                 }
             }
 
@@ -277,14 +347,17 @@ namespace PokerTournament
 
         //Look at the ratio for how much you'll have to pay vs the potential payout if you win
         //Lower pot odds are less worth the risk - balance this with confidence in hand
-        private float GetPotOdds()
+        private float GetPotOdds(int opponentBetAmt)
         {
             //Divide total pot by amount you need to spend to call
             //Invert percentage so that higher % is better
-            return 1 - ((currentRound.OpponentBetAmt - currentRound.PlayerBetAmt) / currentRound.Pot);
+            /*float test = currentRound.OpponentBetAmt - currentRound.PlayerBetAmt;
+            float test2 = test / currentRound.Pot;
+            float result =   (currentRound.OpponentBetAmt - currentRound.PlayerBetAmt) / currentRound.Pot;*/
+            return 1 - ((float)opponentBetAmt / currentRound.Pot);
         }
 
-        ///Returns a key value pair of the longest consecutive set of cards by value (position start, amount consecutive)
+        //Returns a key value pair of the longest consecutive set of cards by value (position start, amount consecutive)
         private KeyValuePair<int, int> HighestConsecutivePair()
         {
             int consecutiveCount = 1;
@@ -295,7 +368,7 @@ namespace PokerTournament
             //Determine consecutive cards and times there are sets
             for(int i = 1; i <= 4; i++)
             {
-                if(hand[i-1].Value = hand[i].Value - 1)
+                if(Hand[i-1].Value == Hand[i].Value - 1)
                 {
                     consecutiveCount++;
                 }
