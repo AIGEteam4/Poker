@@ -15,6 +15,10 @@ namespace PokerTournament
         int opponentMoney;//Keeps track of how much money the opponent has
 
         Round currentRound;//Object keeps track of important info about this round
+        
+         //bet2 vars
+        int oppHandVal, oppDiscards, actionCount;
+        bool firstTurn = true; //reset every round somehow (in bet1?)
 
         float[] handProbability = {
             0.5f,//0 - high card, 50% chance of occurring
@@ -152,7 +156,59 @@ namespace PokerTournament
         //Implemented by Mark Scott
         public override PlayerAction BettingRound2(List<PlayerAction> actions, Card[] hand)
         {
+             //first guess the opponents hand based on the number of cards they discarded (only once)
+            if (firstTurn)
+            {
+                actionCount = actions.Count - 1;
+                oppDiscards = GetOpponentDiscards(actions);
+                EvaluateOpponentsHand(); // sets firstTurn to false
+            }
+
+            //combine knowledge of opponents hand with knowledge of your own hand
+
+            //reuse Bet1 logic
+
             return new PlayerAction(Name, "Bet2", "bet", 10);//Placeholder
+        }
+        
+         private int GetOpponentDiscards(List<PlayerAction> actions)
+        {
+            if(actions[actionCount].ActionPhase == "draw" && actions[actionCount].Name != Name)//draw phase + not your turn (this applies if you drew first)
+            {
+                //this is the opponents last drawing phase
+                return actions[actionCount].Amount;
+            }
+            else //they drew first
+            {
+                return actions[actionCount - 2].Amount;
+            }
+        }
+
+        private void EvaluateOpponentsHand() //numbers should be scaled to match bet1 confidence scale
+        {
+            switch(oppDiscards)
+            {
+                case 0: //opponent did not discard (probably a very good hand)
+                    oppHandVal = 10;
+                    break;
+                case 1: //opponent has either 2 pair or 4 of a kind
+                    oppHandVal = 8; //or 3?
+                    break;
+                case 2: //opponent has 3 of a kind
+                    oppHandVal = 4;
+                    break;
+                case 3: //opponent has a pair
+                    oppHandVal = 2;
+                    break;
+                case 4: //opponent discarded all but their high card (so it might be decently high)
+                    oppHandVal = 1;
+                    break;
+                default: //errors or all discarded
+                    oppHandVal = 0;
+                    break;
+            }
+
+            firstTurn = false;
         }
 
         //Calculate maximum amt we're willing to bet this round
@@ -226,6 +282,78 @@ namespace PokerTournament
             //Divide total pot by amount you need to spend to call
             //Invert percentage so that higher % is better
             return 1 - ((currentRound.OpponentBetAmt - currentRound.PlayerBetAmt) / currentRound.Pot);
+        }
+
+        ///Returns a key value pair of the longest consecutive set of cards by value (position start, amount consecutive)
+        private KeyValuePair<int, int> HighestConsecutivePair()
+        {
+            int consecutiveCount = 1;
+
+            //final position, amount consecutive
+            Dictionary<int, int> consecutiveSets = new Dictionary<int, int>();
+
+            //Determine consecutive cards and times there are sets
+            for(int i = 1; i <= 4; i++)
+            {
+                if(hand[i-1].Value = hand[i].Value - 1)
+                {
+                    consecutiveCount++;
+                }
+                else if(consecutiveCount == 1)
+                    continue;
+                else
+                {
+                    consecutiveSets.Add(i, consecutiveCount);
+                    consecutiveCount = 1;
+                }
+            }
+
+            int highestConsecutive = 1;
+            int highestConsecPos = 0;
+
+            //Find the greatest set in the hand
+            foreach(int key in consecutiveSets.Keys)
+            {
+                if(consecutiveSets[key] > highestConsecutive)
+                {
+                    highestConsecutive = consecutiveSets[key];
+                    highestConsecPos = key - (highestConsecutive - 1);
+                }
+            }
+
+            //Returns key value pair of the starting position and consecutive number of cards by value
+            return new KeyValuePair<int, int>(highestConsecPos, highestConsecutive);
+        }
+
+        //Returns a dictionary of the amount of cards in each suite within the hand
+        private Dictionary<string, int> CardsPerSuite()
+        {
+            //Counts for each suite type
+            int heartCount = 0;
+            int spadeCount = 0;
+            int diamondCount = 0;
+            int clubsCount = 0;
+
+            Dictionary<string, int> cardsPerSuite = new Dictionary<string, int>();
+
+            for(int i = 0; i < Hand.Length; i++)
+            {
+                if(Hand[i].Suit == "Hearts")
+                    heartCount++;
+                else if(Hand[i].Suit == "Diamonds")
+                    diamondCount++;
+                else if(Hand[i].Suit == "Spades")
+                    spadeCount++;
+                else if(Hand[i].Suit == "Clubs")
+                    clubsCount++;
+            }
+
+            cardsPerSuite.Add("Hearts", heartCount);
+            cardsPerSuite.Add("Diamonds", diamondCount);
+            cardsPerSuite.Add("Spades", spadeCount);
+            cardsPerSuite.Add("Clubs", clubsCount);
+
+            return cardsPerSuite;
         }
 
     }
