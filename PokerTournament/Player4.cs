@@ -28,14 +28,14 @@ namespace PokerTournament
         {
             rand = new Random();//Rand object for any random number generation we need to do
 
-            currentRoundNumber = 1;//Goes from 1-100
+            currentRoundNumber = 0;//Goes from 1-100
             opponentMoney = mny;//Assume they start with the same amt of money as us
 
-            currentRound = new Round(0);//Start with round 0
+            //currentRound = new Round(0);//Start with round 0
         }
 
         //Start a new round
-        private void newRound()
+        private void NewRound()
         {
             currentRound = new Round(++currentRoundNumber);            
         }
@@ -43,46 +43,104 @@ namespace PokerTournament
         //Actions for betting round 1
         public override PlayerAction BettingRound1(List<PlayerAction> actions, Card[] hand)
         {
-            Evaluate.SortHand(Hand);
+            Evaluate.SortHand(Hand);//Make sure hand is sorted
 
-            confidence = GetHandConfidence();
+            confidence = GetHandConfidence();//Get confidence for current hand
 
-            int maxBet = (int)(GetMaxBet() * confidence);
+            int maxBet = (int)(GetMaxBet() * confidence);//Maximum amt we're willing to bet... This probably isn't a good option right now
 
             //If they're going first, get their action so we can factor that in
             //Can call, raise, or fold
-            if (Dealer)
+            if (actions.Count > 0)
             {
+                if(actions.Count <= 1)
+                {
+                    NewRound();
+                }
+
                 PlayerAction opponentAction = actions.Last();
 
-                int oppBetAmt = 0;
+                int oppBetAmt = 0;//How much opponent just bet
 
-                if (opponentAction.ActionName == "bet")
+                //If the opponent bet/raised, determine whether to call, raise, or fold
+                //Calling will end the betting round
+                //Raising will send it back around to the opponent
+                //Folding will obviously mean we lose
+                if (opponentAction.ActionName == "bet" || opponentAction.ActionName == "raise")
                 {
                     oppBetAmt = opponentAction.Amount;
                     opponentMoney -= oppBetAmt;
                     currentRound.AddOpponentBet(oppBetAmt);
+
+                    //How much have they bet? Would the amount of money we'd have to pay to match them be worth the risk?
+                    float potOdds = GetPotOdds();
+
+                    //If we don't have enough money to match, fold
+                    //Otherwise, if the pot odds are bad and our confidence is low, randomly decide whether we're going to fold based on confidence
+                    //Lower confidence = more likely to fold
+                    if (oppBetAmt > Money || (potOdds < confidence && rand.NextDouble() > confidence))
+                    {
+                        return new PlayerAction(Name, "Bet1", "fold", 0);
+                    }
+                    //We're staying in! Random chance of only calling based on confidence
+                    else if (rand.NextDouble() > confidence)
+                    {
+                        return new PlayerAction(Name, "Bet1", "call", 0);
+                    }
+                    //If not folding or calling, raise
+                    else
+                    {
+                        //Get amount to raise by as random number between 0 and absolute max of 25
+                        //Varies based on confidence rating
+                        int betAmt = GetAmountToBet();
+
+                        return new PlayerAction(Name, "Bet1", "raise", betAmt);
+                    }
                 }
-                else
+                //The only other option is that they're checking
+                else//opponentAction.ActionName == "check"
                 {
-                    confidence += .1f;
+                    //Wow, they checked right off the bat?
+                    //Increase confidence by 10% because they probably have a bad hand
+                    confidence = Math.Min(1f, confidence * 1.1f);
+
+                    //Definitely don't fold! Decide whether to check as well or raise
+                    if (rand.NextDouble() > confidence)
+                    {
+                        return new PlayerAction(Name, "Bet1", "check", 0);
+                    }
+                    //If not folding or calling, raise
+                    else
+                    {
+                        //Get amount to raise by as random number between 0 and absolute max of 25
+                        //Varies based on confidence rating
+                        int betAmt = GetAmountToBet();
+
+                        return new PlayerAction(Name, "Bet1", "raise", betAmt);
+                    }
                 }
-
-                if (oppBetAmt > maxBet)
-                    return new PlayerAction(Name, "Bet1", "fold", 0);
-
-                //Determine what to do based on how much they bet
-
             }
             //If we're going first, will have to base decision entirely off of hand strength
             //Can check, bet, or fold
             else
             {
-                //Determine what to do
-            }
+                NewRound();//Start new round
 
-            //Return a PlayerAction object
-            return new PlayerAction(Name, "Bet1", "bet", 10);//Placeholder
+                //Determine what to do, we're going first
+                if (rand.NextDouble() > confidence)
+                {
+                    return new PlayerAction(Name, "Bet1", "check", 0);
+                }
+                //If not folding or checking, bet
+                //Get amount to bet as random number between 0 and absolute max of 25
+                //Varies based on confidence rating
+                else
+                {
+                    int betAmt = GetAmountToBet();
+
+                    return new PlayerAction(Name, "Bet1", "bet", betAmt);
+                }      
+            }
         }
 
         //Actions for draw round
@@ -102,6 +160,13 @@ namespace PokerTournament
         private int GetMaxBet()
         {
             return Money / 15 - currentRound.PlayerBetAmt;
+        }
+
+        //Randomly determine what to bet based on confidence
+        private int GetAmountToBet()
+        {
+            //Absolute max is 25 when at max confidence
+            return rand.Next(1, (int)(25 * confidence));
         }
 
         //Calculate confidence in hand
@@ -154,12 +219,13 @@ namespace PokerTournament
             return strength;//Return strength as float
         }
 
-        //Look at how much you'll have to pay vs the potential payout if you win
+        //Look at the ratio for how much you'll have to pay vs the potential payout if you win
+        //Lower pot odds are less worth the risk - balance this with confidence in hand
         private float GetPotOdds()
         {
-
-
-            return 0;
+            //Divide total pot by amount you need to spend to call
+            //Invert percentage so that higher % is better
+            return 1 - ((currentRound.OpponentBetAmt - currentRound.PlayerBetAmt) / currentRound.Pot);
         }
 
     }

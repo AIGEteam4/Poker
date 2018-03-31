@@ -54,6 +54,7 @@
     <Compile Include="Player10.cs" />
     <Compile Include="Player2.cs" />
     <Compile Include="Player3.cs" />
+    <Compile Include="Player4 - Backup.cs" />
     <Compile Include="Player4.cs" />
     <Compile Include="Player5.cs" />
     <Compile Include="Player6.cs" />
