@@ -150,7 +150,150 @@ namespace PokerTournament
         //Actions for draw round
         public override PlayerAction Draw(Card[] hand)
         {
-            return new PlayerAction(Name, "Draw", "draw", 0);
+                       //Discard List
+            List<int> discardList = new List<int>();
+
+            //Check if lower than a straight
+            if(hand.Rank <= 4)
+            {
+                //Evaluate straights or flushes in the hand
+                KeyValuePair<int, int> consecutiveSet = HighestConsecutiveSet();
+
+                Dictionary<string, int> cardsPerSuite = CardsPerSuite();
+
+                //Determine probabilities of finishing a straight
+                int amountForStraight = 5 - consecutiveSet.Value;
+                float straightChance = 4.0f / (amountForStraight * 42.0f);
+
+                //Determine probabilities of finishing a flush
+                float flushChance = 0.0f; 
+
+                foreach(KeyValuePair<string, int> pair in cardsPerSuite)
+                {
+                    //Reasonable chance to get a flush
+                    if(cardsPerSuite[pair.Key] >= 3)
+                    {
+                        if(cardsPerSuite[pair.Key] == 3)
+                            flushChance = 0.125f;  //1 in 8 chance : does not account for less cards in deck
+                        else
+                            flushChance = 0.25f;  //1 in 4 chance : does not account for less cards in deck
+                    }
+                }
+                //2 or less cards of same suite, too low of a chance to consider
+                if(flushChance == 1.0f)
+                    flushChance = 0.007f;
+
+                //Discard logic here
+
+                
+
+                //Set up discard list
+                switch(hand.Rank)
+                {
+                    //High card
+                    case 1:
+
+                        //Should it try for a flush or try for a straight?
+                        if(flushChance > 0.125f)
+                        {
+                            foreach(KeyValuePair<string, int> pair in cardsPerSuite)
+                            {
+                                if(cardsPerSuite[pair.Key] >= 3)
+                                {
+                                    for(int i = 0; i < 5; i++)
+                                    {
+                                        if(hand[i].Suit != pair.Key)
+                                            discardList.Add(i);
+                                    }
+                                }
+                            }
+                        }
+                        else if(straightChance >= 0.09)
+                        {
+                            //Discard the card not consecutive
+                            for(int i = 0; i < hand.Count(); i++)
+                            {
+                                int count = Evaluate.ValueCount(i, Hand);
+                                if(count == 1)
+                                {
+                                    discardList.Add(i);
+                                    break;
+                                }
+                            }
+                        }
+                        else
+                        {
+                            //Discard
+                            for(int i = 0; i < 5; i++)
+                            {
+                                discardList.Add(i);
+                            }
+                        }
+                        //Bluff?
+
+                        break;
+                    //One Pair
+                    case 2:
+
+                        //Should it try for a flush or try for a straight?
+
+
+                        //Bluff?
+
+                        //Discard the cards not in the pair
+                        for(int i = 0; i < hand.Count(); i++)
+                        {
+                            int count = Evaluate.ValueCount(i, Hand);
+                            if(count == 1)
+                                discardList.Add(i);
+                        }
+                        
+                        break;
+                    //Two Pair
+                    case 3:
+                        //Discard the card not in a pair
+                        for(int i = 0; i < hand.Count(); i++)
+                        {
+                            int count = Evaluate.ValueCount(i, Hand);
+                            if(count == 1)
+                                discardList.Add(i);
+                        }
+                        break;
+                    //3 of a kind
+                    case 4:
+                        //Discard
+                        if(consecutiveSet.Key != 0)
+                        {
+                            //High card is in 3 of a kind
+                            if(consecutiveSet.Key + 3 == 4)
+                            {
+                                discardList.Add(0);
+                                discardList.Add(1);
+                            }
+                            else
+                            {
+                                discardList.Add(0);
+                                discardList.Add(4);
+                            }
+                        }
+                        //Low 3 of a kind
+                        else if(consecutiveSet.Key == 0)
+                        {
+                            discardList.Add(3);
+                            discardList.Add(4);
+                        }
+                        break;
+                }
+
+                //Discard any cards
+                for(int i = 0; i < discardList.Count(); i++)
+                {
+                    hand[discardList[i]] = null;
+                }
+                        
+            }
+
+            return new PlayerAction(Name, "Draw", "draw", discardList.Count());
         }
 
         //Implemented by Mark Scott
@@ -357,8 +500,8 @@ namespace PokerTournament
             return 1 - ((float)opponentBetAmt / currentRound.Pot);
         }
 
-        //Returns a key value pair of the longest consecutive set of cards by value (position start, amount consecutive)
-        private KeyValuePair<int, int> HighestConsecutivePair()
+        ///Returns a key value pair of the longest consecutive set of cards by value (position start, amount consecutive)
+        private KeyValuePair<int, int> HighestConsecutiveSet()
         {
             int consecutiveCount = 1;
 
