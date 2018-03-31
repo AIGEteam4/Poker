@@ -162,6 +162,78 @@ namespace PokerTournament
             return 0;
         }
 
+        ///Returns a key value pair of the longest consecutive set of cards by value (position start, amount consecutive)
+        private KeyValuePair<int, int> HighestConsecutivePair()
+        {
+            int consecutiveCount = 1;
+
+            //final position, amount consecutive
+            Dictionary<int, int> consecutiveSets = new Dictionary<int, int>();
+
+            //Determine consecutive cards and times there are sets
+            for(int i = 1; i <= 4; i++)
+            {
+                if(hand[i-1].Value = hand[i].Value - 1)
+                {
+                    consecutiveCount++;
+                }
+                else if(consecutiveCount == 1)
+                    continue;
+                else
+                {
+                    consecutiveSets.Add(i, consecutiveCount);
+                    consecutiveCount = 1;
+                }
+            }
+
+            int highestConsecutive = 1;
+            int highestConsecPos = 0;
+
+            //Find the greatest set in the hand
+            foreach(int key in consecutiveSets.Keys)
+            {
+                if(consecutiveSets[key] > highestConsecutive)
+                {
+                    highestConsecutive = consecutiveSets[key];
+                    highestConsecPos = key - (highestConsecutive - 1);
+                }
+            }
+
+            //Returns key value pair of the starting position and consecutive number of cards by value
+            return new KeyValuePair<int, int>(highestConsecPos, highestConsecutive);
+        }
+
+        //Returns a dictionary of the amount of cards in each suite within the hand
+        private Dictionary<string, int> CardsPerSuite()
+        {
+            //Counts for each suite type
+            int heartCount = 0;
+            int spadeCount = 0;
+            int diamondCount = 0;
+            int clubsCount = 0;
+
+            Dictionary<string, int> cardsPerSuite = new Dictionary<string, int>();
+
+            for(int i = 0; i < Hand.Length; i++)
+            {
+                if(Hand[i].Suit == "Hearts")
+                    heartCount++;
+                else if(Hand[i].Suit == "Diamonds")
+                    diamondCount++;
+                else if(Hand[i].Suit == "Spades")
+                    spadeCount++;
+                else if(Hand[i].Suit == "Clubs")
+                    clubsCount++;
+            }
+
+            cardsPerSuite.Add("Hearts", heartCount);
+            cardsPerSuite.Add("Diamonds", diamondCount);
+            cardsPerSuite.Add("Spades", spadeCount);
+            cardsPerSuite.Add("Clubs", clubsCount);
+
+            return cardsPerSuite;
+        }
+
     }
 
     class Round
