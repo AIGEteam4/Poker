@@ -77,7 +77,7 @@ namespace PokerTournament
                 Console.Write("Select the second player (1 - 10): ");
                 string num2Str = Console.ReadLine();
                 int.TryParse(num2Str, out num2);
-            } while (num2 <= 0 || num2 > 10);
+            } while (num2 <= 0 || num2 > 11);
 
             switch (num2)
             {
@@ -91,6 +91,7 @@ namespace PokerTournament
                 case 8: p1 = eight; break;
                 case 9: p1 = nine; break;
                 case 10: p1 = ten; break;
+                case 11: p1 = new Human(11, "Human", 1000); break;
             }
 
             // create the Game

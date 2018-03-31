@@ -8,558 +8,209 @@ namespace PokerTournament
 {
     class Player4 : Player
     {
-        //Variables for the betting phases
-        MoveSequence chooseMove = new MoveSequence();
-        TurnDetails details = new TurnDetails();
+        Random rand;//Random number generator to determine what actions are taken based on confidence probability
+        float confidence;//Number between 0-1 that represents confidence that have winning hand
+
+        int currentRoundNumber;//Number of the round we're currently on
+        int opponentMoney;//Keeps track of how much money the opponent has
+
+        Round currentRound;//Object keeps track of important info about this round
+
+        float[] handProbability = {
+            0.5f,//0 - high card, 50% chance of occurring
+            0.58f,//1 - one pair, 42% chance of occurring
+            0.95f,//2 - two pair, ~5% chance of occurring
+            0.98f,//3 - three of a kind, ~2% chance of occurring
+            1//4+ - straight or better, <1% chance of occurring
+        };
 
         public Player4(int idNum, string nm, int mny) : base(idNum, nm, mny)
         {
-            //initialize game details
-            details = new TurnDetails(mny, Name);
+            rand = new Random();//Rand object for any random number generation we need to do
+
+            currentRoundNumber = 1;//Goes from 1-100
+            opponentMoney = mny;//Assume they start with the same amt of money as us
+
+            currentRound = new Round(0);//Start with round 0
         }
 
+        //Start a new round
+        private void newRound()
+        {
+            currentRound = new Round(++currentRoundNumber);            
+        }
+
+        //Actions for betting round 1
         public override PlayerAction BettingRound1(List<PlayerAction> actions, Card[] hand)
         {
-            //estimate values and update the rounds details
-            Card highestCard;
-            int rating = Evaluate.RateAHand(hand, out highestCard);
-            details.Update(rating, "Bet1");
+            Evaluate.SortHand(Hand);
 
-            //return the playeraction
-            return chooseMove.calc(actions, details);
+            confidence = GetHandConfidence();
+
+            int maxBet = (int)(GetMaxBet() * confidence);
+
+            //If they're going first, get their action so we can factor that in
+            //Can call, raise, or fold
+            if (Dealer)
+            {
+                PlayerAction opponentAction = actions.Last();
+
+                int oppBetAmt = 0;
+
+                if (opponentAction.ActionName == "bet")
+                {
+                    oppBetAmt = opponentAction.Amount;
+                    opponentMoney -= oppBetAmt;
+                    currentRound.AddOpponentBet(oppBetAmt);
+                }
+                else
+                {
+                    confidence += .1f;
+                }
+
+                if (oppBetAmt > maxBet)
+                    return new PlayerAction(Name, "Bet1", "fold", 0);
+
+                //Determine what to do based on how much they bet
+
+            }
+            //If we're going first, will have to base decision entirely off of hand strength
+            //Can check, bet, or fold
+            else
+            {
+                //Determine what to do
+            }
+
+            //Return a PlayerAction object
+            return new PlayerAction(Name, "Bet1", "bet", 10);//Placeholder
         }
 
+        //Actions for draw round
         public override PlayerAction Draw(Card[] hand)
         {
-            Card highCard;
-            int rating = Evaluate.RateAHand(Hand, out highCard);
-
-            int discard = new DiscardNode().Discard(ref hand, rating);
-
-            return new PlayerAction(Name, "Draw", "draw", discard);
+            return new PlayerAction(Name, "Draw", "draw", 0);
         }
 
         //Implemented by Mark Scott
         public override PlayerAction BettingRound2(List<PlayerAction> actions, Card[] hand)
         {
-            //estimate values and update the rounds details
-            Card highestCard;
-            int rating = Evaluate.RateAHand(hand, out highestCard);
-            details.Update(rating, "Bet2");
+            return new PlayerAction(Name, "Bet2", "bet", 10);//Placeholder
+        }
 
-            //return the playeraction
-            return chooseMove.calc(actions, details);
+        //Calculate maximum amt we're willing to bet this round
+        //As it is right now, I don't think this is a great solution
+        private int GetMaxBet()
+        {
+            return Money / 15 - currentRound.PlayerBetAmt;
+        }
 
-            /* old Nelson Stuff
-            //Rate the hand
-            Card highestCard;
-            int handRating = Evaluate.RateAHand(hand, out highestCard);
+        //Calculate confidence in hand
+        private float GetHandConfidence()
+        {
+            Card highCard;
 
-            //Selector
-            PlayerAction pa = new PlayerAction(Name, "Bet2", "fold", 0);
-            if (AllInSequence(handRating))
+            //Clamp rating to value btwn 0-4
+            //0 is high card, 4 is a straight or better - we treat 4+ hands all functionally the same since they're all such insanely rare/good hands
+            int rating = Math.Min(Evaluate.RateAHand(Hand, out highCard) - 1, 4);
+
+            float conf = handProbability[rating];
+
+            //If we have a high card, modify confidence based on its value
+            //Maximum confidence possible for a high card is 50%
+            if(rating <= 1)
             {
-                pa = new PlayerAction(Name, "Bet2", "raise", Money);
-            }
-            else if (RaiseSequence(handRating))
-            {
-                pa = new PlayerAction(Name, "Bet2", "raise", (int)(Money / 4));
-            }
-            else if (actions.Count > 0 && CallSequence(actions[actions.Count - 1], handRating))
-            {
-                pa = new PlayerAction(Name, "Bet2", "call", actions[actions.Count - 1].Amount);
-            }
-            else if (CheckSequence(handRating))
-            {
-                pa = new PlayerAction(Name, "Bet2", "check", 0);
+                conf *= (highCard.Value-1) / 13;
             }
 
-            return pa;
-            */
-        }
-        
-        //*************************************
-        //Nelson's Behavior Tree Methods
-        //*************************************
-
-        #region Nelsons Behavior Tree (Not currently used)
-
-        //Checks to see if we should go all in
-        bool AllInSequence(int rating)
-        {
-            if (Money > 0 && rating >= 5)
+            //If we have pairs, modify confidence by the strength of these pairs
+            else if(rating >= 2 && rating <= 3)
             {
-                return true;
-            }
-            return false;
-        }
-
-        //Should raise
-        bool RaiseSequence(int rating)
-        {
-            if (Money >= (int)Money / 4 && rating > 1)
-            {
-                return true;
-            }
-            return false;
-        }
-
-        //Should call
-        bool CallSequence(PlayerAction lastAction, int rating)
-        {
-            if (lastAction.ActionName == "raise" && rating > 0 && Money > lastAction.Amount)
-            {
-                return true;
-            }
-            return false;
-        }
-
-        //Just check
-        bool CheckSequence(int rating)
-        {
-            if (rating > 0)
-            {
-                return true;
-            }
-            return false;
-        }
-
-        #endregion
-    }
-
-    //*************************************
-    //Zane's Behavior Tree Nodes and Struct
-    //*************************************
-
-    #region Zane's Behavior Tree Content
-
-    //Struct: Holds the values unique to this players turn for more advanced strategy determination
-    struct TurnDetails
-    {
-
-        //Variables
-        public int rating;
-        public int money;
-        public string name;
-        public string phase;
-        public int betAmount;
-
-        //Constructor - only initializes money and the name
-        public TurnDetails(int m, string n)
-        {
-            //based off of input
-            money = m;
-            name = n;
-
-            //initialized after the hand is dealt
-            rating = 0;
-            phase = "";
-            betAmount = 0;
-        }
-
-        //Update: This updates the phase and rating of the hand whenever a betting phase is called
-        public void Update(int newRating, string newPhase)
-        {
-            phase = newPhase;
-            rating = newRating;
-        }
-    }
-
-    //Class: Base TurnNode. All members of the behavior tree inherit from this class
-    class TurnNode
-    {
-        //calc: must be used by all children. All behavior logic is contained in these
-        public virtual PlayerAction calc(List<PlayerAction> actions, TurnDetails details)
-        {
-            return null;
-        }
-
-        //EstimateValueOfHand: This determines the monetary range the AI will work with in their betting
-        public int estimateValueOfHand(TurnDetails details)
-        {
-            int max;
-
-            //This is for the first betting phase
-            if (details.phase == "Bet1")
-            {
-                max = 200;
-                if (details.money < max) max = details.money;   //keeps the max value from exceeding the current money
-                float percent1 = details.rating / 5f;
-                max = (int)(max * percent1);
-
-                return max;
+                //rating - 1 = number of pairs
+                //Strength of pairs is value between 0-1, multiply it by the range between probability rating of this hand and the next worst hand
+                //Sssentially, a pair of 2s is only barely better than a high Ace, while a pair of Aces is almost as good as the worst three of a kind
+                conf += GetStrengthOfPairs(rating - 1) * (handProbability[rating] - handProbability[rating - 1]);
             }
 
-            //this raises the mentary range for the second betting phase
-            max = 400;
-            if (details.money < max) max = details.money;   //keeps the max value from exceeding the current money
-            float percent2 = details.rating / 5f;
-            max = (int)(max * percent2);
-
-            return max;
-        }
-    }
-
-    //Class: MoveSequence is used to run through the logic of all other nodes
-    class MoveSequence: TurnNode
-    {
-        public MoveSequence()
-        {
+            return conf;
         }
 
-        //The calc implementation in this class is the head of the behavior tree and returns the final PlayerAction determined
-        public override PlayerAction calc(List<PlayerAction> actions, TurnDetails details)
+        //Use this to determine how strong our hand is if it's a one pair/two pair
+        private float GetStrengthOfPairs(int numPairs)
         {
-            //The two different directions the tree can branch
-            Bet bet = new Bet();
-            Raise raise = new Raise();
+            float strength = 0;
 
-            //only allows bet if it hasn't been called already, otherwise raise is called
-            int actionIndex = actions.Count;
-            if (actionIndex > 0)
-                if (actions[actionIndex - 1].ActionName != "check")
-                    return raise.calc(actions, details);
-
-            return bet.calc(actions, details);
-        }
-    }
-
-    //Check behavior
-    class Check : TurnNode
-    {
-        //This calc implementation only allows the player do fold instead of check in the second round.
-        public override PlayerAction calc(List<PlayerAction> actions, TurnDetails details)
-        {
-            //Bet1 always returns a check from here
-            if(details.phase == "Bet1")
-                return new PlayerAction(details.name, details.phase, "check", 0);
-
-            //Bet2 only cheks if it has a hand ranking higher then 1
-            if (details.rating >= 2)
-                return new PlayerAction(details.name, details.phase, "check", 0);
-
-            //Otherwise it folds
-            Fold fold = new Fold();
-            return fold.calc(actions, details);
-        }
-    }
-
-    //Bet behavior
-    class Bet : TurnNode
-    {
-        //This calc impl. determines the value of the bet based off whether the other player checked
-        public override PlayerAction calc(List<PlayerAction> actions, TurnDetails details)
-        {
-            //determines the monetary value of the hand
-            int estVal = estimateValueOfHand(details);
-            Console.WriteLine(estVal);
-
-            //If the other player went first that means their hand wasn't good enough to wager
-            if (actions.Count > 0)
+            //Check for pairs within cards and increase strength based on value of any pairs found
+            //Since they're pre-sorted we know pairs will be right next to each other in a hand
+            for(int i = 0; i < 5; ++i)
             {
-                //If this hand is decent, wager a lot
-                if (details.rating > 4)
+                if(Hand[i].Value == Hand[i+1].Value)
                 {
-                    details.betAmount += estVal / 2;
-                    return new PlayerAction(details.name, details.phase, "bet", estVal / 2);
+                    //Strength of pair is determined by value where 2 is worth ~0.076 and A is worth 1
+                    //If we're evaluating a two pair then get average strength of them both
+                    strength += (Hand[i++].Value-1) / (13 * numPairs);
                 }
-                //otherwise still wager something because of their bad hand
-                details.betAmount += estVal / 4;
-                return new PlayerAction(details.name, details.phase, "bet", estVal / 4);
-            }
-            //If we are first, only wager if we have a decent hand (better then 1)
-            else if (details.rating >= 2)
-            {
-                details.betAmount += estVal / 4;
-                return new PlayerAction(details.name, details.phase, "bet", estVal / 4);
             }
 
-            //Otherwise check
-            Check check = new Check();
-            return check.calc(actions, details);
+            return strength;//Return strength as float
         }
-    }
 
-    //Call behavior
-    class Call : TurnNode
-    {
-        //this calc impl. will match the other players wager if its not too far from the value of our own hand
-        public override PlayerAction calc(List<PlayerAction> actions, TurnDetails details)
-        {
-            //determine current values
-            Fold fold = new Fold();
-            int estVal = estimateValueOfHand(details);
-            int actionIndex = actions.Count - 1;
-            int inValue = actions[actionIndex].Amount + details.betAmount;
-
-            //if they aren't wagering more than 120% our est. monetary value, then call
-            if (inValue <= (estVal + (estVal * .2f)))
-            {
-                details.betAmount += actions[actionIndex].Amount;
-                return new PlayerAction(details.name, details.phase, "call", 0);
-            }
-            
-            //otherwise fold, we're beat
-            return fold.calc(actions, details);
-        }
-    }
-
-    //Raise behavior
-    class Raise : TurnNode
-    {
-        //this calc impl. will raise depending on our hand value, rating and current bet pool
-        public override PlayerAction calc(List<PlayerAction> actions, TurnDetails details)
-        {
-            //determine current values
-            Call call = new Call();
-            int estVal = estimateValueOfHand(details);
-            int actionIndex = actions.Count - 1;
-            int inValue = actions[actionIndex].Amount + details.betAmount;
-            
-            //if the current pool commitment isn't moer then double our est. hand value
-            if (inValue >= estVal && inValue < estVal * 2)
-            {
-                //if we have a great hand, wager a lot
-                int raiseAmount = (estVal * 2) - inValue;
-                if (details.rating > 7)
-                {
-                    details.betAmount += raiseAmount;
-                    return new PlayerAction(details.name, details.phase, "raise", raiseAmount);
-                }
-
-                //otherwise just call
-                return call.calc(actions, details);
-            }
-
-            //if the wager is still low, raise
-            if (inValue < (estVal / 2))
-            {
-                details.betAmount += (estVal / 4);
-                return new PlayerAction(details.name, details.phase, "raise", (estVal / 4));
-            }
-
-            //if the wager is still low, commit our est. hand value
-            if (inValue < estVal)
-            {
-                details.betAmount += estVal;
-                return new PlayerAction(details.name, details.phase, "raise", estVal);
-            }
-
-            //otherwise call
-            return call.calc(actions, details);
-        }
-    }
-
-    //Fold behavior
-    class Fold : TurnNode
-    {
-        //this calc impl. returns the fold playeraction
-        public override PlayerAction calc(List<PlayerAction> actions, TurnDetails details)
-        {
-            return new PlayerAction(details.name, details.phase, "fold", 0); ;
-        }
-    }
-
-
-    class DiscardNode
-    {
-        public virtual int Discard(ref Card[] hand, int rating)
+        //Look at how much you'll have to pay vs the potential payout if you win
+        private float GetPotOdds()
         {
 
-            //Hand is really good, unfeasible to try and improve
-            //hands are: straight royal flush, straight flush, full house, straight and flush
-            if (rating >= 5 && rating != 8) //4 of a kind is excluded, it's also a match hand
+
+            return 0;
+        }
+
+    }
+
+    class Round
+    {
+        private int ante;//Ante of current round, increases as game goes on
+        private int pot;//Pot for current roud, increases as players bet
+        private int opponentBetAmt;//How much the opponent has bet this round so far
+        private int playerBetAmt;//How much we have bet this round so far
+
+        //Props
+        public int Ante { get { return ante; } }
+        public int Pot { get { return pot; } }
+        public int OpponentBetAmt { get { return opponentBetAmt; } }
+        public int PlayerBetAmt { get { return playerBetAmt; } }
+
+        //Constructor takes current round number
+        public Round(int roundNum)
+        {
+            //Calculate ante based on current round
+            if (roundNum > 50)
             {
-                return 0; //no discard
+                ante = 30;
             }
-            //match hands are everything left
-            else if (rating >= 1)
+            else if (roundNum > 25)
             {
-                return new HasMatches().Discard(ref hand, rating);
+                ante = 20;
             }
             else
             {
-                return new HasNothing().Discard(ref hand, rating);
+                ante = 10;
             }
+
+            pot = ante * 2;
+
+            opponentBetAmt = 0;
+            playerBetAmt = 0;
         }
-    }
-    //has matches: either pairs, 3-of-a-kind or 4 
-    //strategy is simple, discard everything that doesn't match
-    class HasMatches : DiscardNode
-    {
-        public override int Discard(ref Card[] hand, int rating)
+
+        public void AddPlayerBet(int amt)
         {
-            int discard = 0;
-            //track which indexies need to be discarded
-            bool[] toDiscard = { false, false, false, false, false };
-            //loop through hand
-            for (int i = 0; i < 5; i++)
-            {
-                //check if card is only one of its value in hand
-                if (Evaluate.ValueCount(hand[i].Value, hand) == 1)
-                {
-                    toDiscard[i] = true;
-                    discard++;
-                }
-            }
-
-            //discarding must be our last action, Evaluate methods will fail if items are null
-            if (discard > 0) //if we have things to discard
-            {
-                for (int j = 0; j < 5; j++) //loop through and discard them
-                {
-                    if (toDiscard[j]) { hand[j] = null; }
-                }
-            }
-
-            return discard;
+            playerBetAmt += amt;
+            pot += amt;
         }
-    }
-    //has nothing of value, must search for the likelyhood each potential combination individually
-    class HasNothing : DiscardNode
-    {
-        public override int Discard(ref Card[] hand, int rating)
+
+        public void AddOpponentBet(int amt)
         {
-            PartialFlush pf = new PartialFlush();
-            PartialStraight ps = new PartialStraight();
-
-            //attempt to find partial flush (will retrun 0 if does not exist)
-            //flushes have a higher chance to occur, straight flushes will regardless of which we prioritize
-            int discard = pf.Discard(ref hand, rating);
-            if (discard > 0)
-            {
-                return discard;
-            }
-
-            //attempt to find partial straight
-            discard = ps.Discard(ref hand, rating);
-            if (discard > 0)
-            {
-                return discard;
-            }
-
-            //if has not returned partial flush or straight, hand is entirely bad
-            //discard all 5 cards
-            for (int i = 0; i < 5; i++)
-            {
-                hand[i] = null;
-            }
-            return 5;
+            opponentBetAmt += amt;
+            pot += amt;
         }
     }
-    class PartialFlush : DiscardNode
-    {
-        public override int Discard(ref Card[] hand, int rating)
-        {
-            //search for flush
-            string[] suits = { "Hearts", "Clubs", "Diamonds", "Spades" };
-            int[] suitCount = { 0, 0, 0, 0 };
-
-            //loop through entire hand
-            for (int i = 0; i < 5; i++)
-            {
-                //loop through every suit, increment respective counter if suit is found
-                for (int j = 0; j < 4; j++)
-                {
-                    if (hand[i].Suit == suits[j]) { suitCount[j]++; }
-                }
-            }
-            //loop through suits and find one with 3 or more
-            int discard = 0;
-            for (int k = 0; k < 4; k++)
-            {
-                //find a suit that has at least 3/5 majority
-                if (suitCount[k] >= 3)
-                {
-                    //loop through hand and discard everything that does not match suit
-                    for (int l = 0; l < 5; l++)
-                    {
-                        if (hand[l].Suit != suits[k])
-                        {
-                            hand[l] = null;
-                            discard++;
-                        }
-                    }
-                    k = 4;//end loop
-                }
-            }
-
-            //if nothing was found, will return 0
-            return discard;
-        }
-    }
-
-    class PartialStraight : DiscardNode
-    {
-        public override int Discard(ref Card[] hand, int rating)
-        {
-            int counter = hand[0].Value; //the value of the previous card
-            //keep track of which indexies had cards that did not conform
-            bool[] nonStraightCards = { false, false, false, false, false };
-            int straightCards = 1; //the number of cards seen sofar that are sequential
-            int error = 0; //difference between this card and last card
-            int totalError = 0;
-            //if totalerror is 1 or 2, we will have a closed straight (missing cards in middle)
-            //if totalerror is larger, there is no chance to recover
-
-            //because hand is sorted we only need to check the first four,
-            for (int i = 1; i < 5; i++)
-            {
-                error = hand[i].Value - (counter + 1);
-                if (error == 0) //perfect lineup
-                {
-                    straightCards++;
-                }
-                else if (error == -1) //card has same value
-                {
-                    //do not increment error, do not count as a straight card
-                    nonStraightCards[i] = true;
-                }
-                else
-                {
-                    totalError += error; //add errors together
-                    if (totalError <= 2)
-                    { //total error is still salvagable
-                        straightCards++;
-                    }
-                    else
-                    {
-                        nonStraightCards[i] = true;
-                    }
-                }
-
-                //if was exceed error threshold but still have at least 3 cards left,
-                //it is possible the first cards were the odd ones out, reset stats and keep going
-                if (totalError > 2 || i >= 2)
-                {
-                    totalError = 0;
-                    straightCards = 1;
-                    //all previous cards are now out of the straight
-                    for (int j = 0; j < i; j++)
-                    {
-                        nonStraightCards[j] = true;
-                    }
-                }
-            }
-            int discard = 0;
-            if (straightCards >= 3) //if straight isn't at least 3 long, just ignore it
-            {
-                //remove all cards that were flagged as not part of the straight
-                for (int k = 0; k < 5; k++)
-                {
-                    if (nonStraightCards[k])
-                    {
-                        discard++;
-                        hand[k] = null;
-                    }
-                }
-            }
-            //returns 0 if no straight
-            return discard;
-        }
-    }
-
-
-    #endregion
-
 }
+
