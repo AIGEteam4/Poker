@@ -15,6 +15,10 @@ namespace PokerTournament
         int opponentMoney;//Keeps track of how much money the opponent has
 
         Round currentRound;//Object keeps track of important info about this round
+        
+         //bet2 vars
+        int oppHandVal, oppDiscards, actionCount;
+        bool firstTurn = true; //reset every round somehow (in bet1?)
 
         float[] handProbability = {
             0.5f,//0 - high card, 50% chance of occurring
@@ -94,7 +98,59 @@ namespace PokerTournament
         //Implemented by Mark Scott
         public override PlayerAction BettingRound2(List<PlayerAction> actions, Card[] hand)
         {
+             //first guess the opponents hand based on the number of cards they discarded (only once)
+            if (firstTurn)
+            {
+                actionCount = actions.Count - 1;
+                oppDiscards = GetOpponentDiscards(actions);
+                EvaluateOpponentsHand(); // sets firstTurn to false
+            }
+
+            //combine knowledge of opponents hand with knowledge of your own hand
+
+            //reuse Bet1 logic
+
             return new PlayerAction(Name, "Bet2", "bet", 10);//Placeholder
+        }
+        
+         private int GetOpponentDiscards(List<PlayerAction> actions)
+        {
+            if(actions[actionCount].ActionPhase == "draw" && actions[actionCount].Name != Name)//draw phase + not your turn (this applies if you drew first)
+            {
+                //this is the opponents last drawing phase
+                return actions[actionCount].Amount;
+            }
+            else //they drew first
+            {
+                return actions[actionCount - 2].Amount;
+            }
+        }
+
+        private void EvaluateOpponentsHand() //numbers should be scaled to match bet1 confidence scale
+        {
+            switch(oppDiscards)
+            {
+                case 0: //opponent did not discard (probably a very good hand)
+                    oppHandVal = 10;
+                    break;
+                case 1: //opponent has either 2 pair or 4 of a kind
+                    oppHandVal = 8; //or 3?
+                    break;
+                case 2: //opponent has 3 of a kind
+                    oppHandVal = 4;
+                    break;
+                case 3: //opponent has a pair
+                    oppHandVal = 2;
+                    break;
+                case 4: //opponent discarded all but their high card (so it might be decently high)
+                    oppHandVal = 1;
+                    break;
+                default: //errors or all discarded
+                    oppHandVal = 0;
+                    break;
+            }
+
+            firstTurn = false;
         }
 
         //Calculate maximum amt we're willing to bet this round
