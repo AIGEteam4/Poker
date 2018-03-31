@@ -168,12 +168,12 @@ namespace PokerTournament
                 //Determine probabilities of finishing a flush
                 float flushChance = 0.0f; 
 
-                foreach(string key in cardsPerSuite)
+                foreach(KeyValuePair<string, int> pair in cardsPerSuite)
                 {
                     //Reasonable chance to get a flush
-                    if(cardsPerSuite[key] >= 3)
+                    if(cardsPerSuite[pair.Key] >= 3)
                     {
-                        if(cardsPerSuite[key] == 3)
+                        if(cardsPerSuite[pair.Key] == 3)
                             flushChance = 0.125f;  //1 in 8 chance : does not account for less cards in deck
                         else
                             flushChance = 0.25f;  //1 in 4 chance : does not account for less cards in deck
@@ -196,14 +196,14 @@ namespace PokerTournament
                         //Should it try for a flush or try for a straight?
                         if(flushChance > 0.125f)
                         {
-                            foreach(string key in cardsPerSuite)
+                            foreach(KeyValuePair<string, int> pair in cardsPerSuite)
                             {
-                                if(cardsPerSuite[key] >= 3)
+                                if(cardsPerSuite[pair.Key] >= 3)
                                 {
                                     for(int i = 0; i < 5; i++)
                                     {
-                                        if(hand[i].Suit != key)
-                                            discardList.Add(hand[i]);
+                                        if(hand[i].Suit != pair.Key)
+                                            discardList.Add(i);
                                     }
                                 }
                             }
@@ -213,7 +213,7 @@ namespace PokerTournament
                             //Discard the card not consecutive
                             for(int i = 0; i < hand.Count(); i++)
                             {
-                                int count = Evaluate.ValueCount(hand[i].Value);
+                                int count = Evaluate.ValueCount(i, Hand);
                                 if(count == 1)
                                 {
                                     discardList.Add(i);
@@ -243,7 +243,7 @@ namespace PokerTournament
                         //Discard the cards not in the pair
                         for(int i = 0; i < hand.Count(); i++)
                         {
-                            int count = Evaluate.ValueCount(hand[i].Value);
+                            int count = Evaluate.ValueCount(i, Hand);
                             if(count == 1)
                                 discardList.Add(i);
                         }
@@ -254,7 +254,7 @@ namespace PokerTournament
                         //Discard the card not in a pair
                         for(int i = 0; i < hand.Count(); i++)
                         {
-                            int count = Evaluate.ValueCount(hand[i].Value);
+                            int count = Evaluate.ValueCount(i, Hand);
                             if(count == 1)
                                 discardList.Add(i);
                         }
@@ -438,7 +438,7 @@ namespace PokerTournament
             //Determine consecutive cards and times there are sets
             for(int i = 1; i <= 4; i++)
             {
-                if(hand[i-1].Value = hand[i].Value - 1)
+                if(Hand[i-1].Value == Hand[i].Value - 1)
                 {
                     consecutiveCount++;
                 }
