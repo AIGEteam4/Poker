@@ -247,15 +247,15 @@ namespace PokerTournament
             PlayerAction lastOpponentAction = actions.Last();
             PlayerAction threeActsAgo = actions[actions.Count - 3];
 
-            int round2Result;
+            int round2Result;//Result that determines what action to take this round
 
             //If we haven't figured out how many cards the opponent discarded yet, this is our first time in round 2
-            if(currentRound.NumCardsOpponentDiscarded < 0)
+            if (currentRound.NumCardsOpponentDiscarded < 0)
             {
                 numTimesRaised = 0;
 
                 //If last action was in draw phase, we know we're going first this round and we can get num discarded from that action
-                if(lastOpponentAction.ActionPhase.ToLower().Equals("draw"))
+                if (lastOpponentAction.ActionPhase.ToLower().Equals("draw"))
                 {
                     //Store number of cards discarded
                     if (lastOpponentAction.ActionName.ToLower().Equals("draw"))
@@ -268,133 +268,68 @@ namespace PokerTournament
 
                     //Return appropriate action based on result
                     if (round2Result == 0)
-                        return new PlayerAction(Name, "Bet2", "call", 0);
-                    else if (round2Result < 0)
-                        return new PlayerAction(Name, "Bet2", "fold", 0);
-                    else
-                        return new PlayerAction(Name, "Bet2", "raise", round2Result);
+                        return new PlayerAction(Name, "Bet2", "check", 0);
+                    else if(round2Result > 0)
+                        return new PlayerAction(Name, "Bet2", "bet", round2Result);
                 }
                 //If we're going second, get discard info from action three items back
                 else if (threeActsAgo.ActionPhase.ToLower().Equals("draw"))
                 {
+                    //If drew, store how many cards
                     if (threeActsAgo.ActionName.ToLower().Equals("draw"))
                         currentRound.StoreNumCardsDiscarded(threeActsAgo.Amount);
-                    else
-                        currentRound.StoreNumCardsDiscarded(0);
-                }                
-            }
-
-            //Get the action we must do this turn
-            if (lastOpponentAction.ActionName.ToLower().Equals("raise") || lastOpponentAction.ActionName.ToLower().Equals("bet"))
-            {
-                currentRound.AddOpponentBet(lastOpponentAction.Amount);
-                //Pass amount bet
-                round2Result = GetRound2Action(lastOpponentAction.Amount);
-            }
-            else
-                //Pass 0 because they checked
-                round2Result = GetRound2Action(0);
-
-            //If 0, call
-            if (round2Result == 0)
-                return new PlayerAction(Name, "Bet2", "call", 0);
-            //If -1, fold
-            else if (round2Result < 0)
-                return new PlayerAction(Name, "Bet2", "fold", 0);
-            //If >0, raise by that amount
-            else
-                return new PlayerAction(Name, "Bet2", "raise", round2Result);
-
-            /*
-            if (Dealer)
-            {
-                
-
-                int oppBetAmt = 0;//How much opponent just bet
-
-                //If the opponent bet/raised, determine whether to call, raise, or fold
-                //Calling will end the betting round
-                //Raising will send it back around to the opponent
-                //Folding will obviously mean we lose
-                if (lastOpponentAction.ActionName == "bet" || lastOpponentAction.ActionName == "raise")
-                {
-                    oppBetAmt = lastOpponentAction.Amount;
-                    opponentMoney -= oppBetAmt;
-                    currentRound.AddOpponentBet(oppBetAmt);
-
-                    
-                }
-                //The only other option is that they're checking
-                else//opponentAction.ActionName == "check"
-                {
-                    //Definitely don't fold! Decide whether to check as well or raise
-                    if (rand.NextDouble() > confidence)
-                    {
-                        return new PlayerAction(Name, "Bet2", "check", 0);
-                    }
-                    //If not folding or calling, raise
-                    else
-                    {
-                        //Get amount to raise by as random number between 0 and absolute max of 25
-                        //Varies based on confidence rating
-                        int betAmt = GetAmountToBet();
-
-                        return new PlayerAction(Name, "Bet2", "bet", betAmt);
-                    }
-                }
-            }
-            //If we're going first, will have to base decision entirely off of hand strength
-            //Can check, bet, or fold
-            else
-            {
-                //Result on what to do for this betting round
-                //-1 = fold
-                //0 = check/call
-                //>0 = raise by that amount
-                //int round2Result;
-
-                //If last action was in draw phase, we're going first here
-                if (lastOpponentAction.ActionPhase.Equals("Draw"))
-                {
-                    if (lastOpponentAction.ActionName.Equals("draw"))
-                        currentRound.StoreNumCardsDiscarded(lastOpponentAction.Amount);
+                    //Otherwise, they stood pat
                     else
                         currentRound.StoreNumCardsDiscarded(0);
 
-                    round2Result = GetRound2Action(-1);
-
-                    if (round2Result == 0)
-                        return new PlayerAction(Name, "Bet2", "check", 0);
-                    else if (round2Result < 0)
-                        return new PlayerAction(Name, "Bet2", "fold", 0);
-                    else
-                        return new PlayerAction(Name, "Bet2", "bet", round2Result);
-                }
-                else
-                {
-                    if (lastOpponentAction.ActionName.Equals("check"))
+                    //Get action to take
+                    if (lastOpponentAction.ActionName.ToLower().Equals("check"))
+                    {
+                        //Get action based on fact they checked
                         round2Result = GetRound2Action(0);
+
+                        //If >0, bet
+                        if (round2Result > 0)
+                            return new PlayerAction(Name, "Bet2", "bet", round2Result);
+                        //If 0, check
+                        else if (round2Result == 0)
+                            return new PlayerAction(Name, "Bet2", "check", 0);
+                    }
                     else
+                    {
+                        //Get action based on how much they bet/raised by
                         round2Result = GetRound2Action(lastOpponentAction.Amount);
 
-                    
+                        //If >0, raise
+                        if (round2Result > 0)
+                            return new PlayerAction(Name, "Bet2", "raise", round2Result);
+                        //If 0, call
+                        else if (round2Result == 0)
+                            return new PlayerAction(Name, "Bet2", "call", 0);
+                    } 
                 }
-                
-                //Determine what to do, we're going first
-                if (rand.NextDouble() > confidence)
-                {
-                    return new PlayerAction(Name, "Bet2", "check", 0);
-                }
-                //If not folding or checking, bet
-                //Get amount to bet as random number between 0 and absolute max of 25
-                //Varies based on confidence rating
-                else
-                {
-                    int betAmt = GetAmountToBet();
 
-                    return new PlayerAction(Name, "Bet2", "bet", betAmt);
-                }
-            }*/
+                //If -1, fold
+                return new PlayerAction(Name, "Bet2", "fold", 0);
+
+            }
+            //If we reach this point, the opponent has raised and we have to respond
+            else
+            {
+                //Pass amount bet
+                round2Result = GetRound2Action(lastOpponentAction.Amount);
+
+                //If >0, raise
+                if (round2Result > 0)
+                    return new PlayerAction(Name, "Bet2", "raise", round2Result);
+                //If 0, call
+                else if (round2Result == 0)
+                    return new PlayerAction(Name, "Bet2", "call", 0);
+                //If -1, fold
+                else
+                    return new PlayerAction(Name, "Bet2", "fold", 0);
+
+            }
         }
         
          private int GetOpponentDiscards(List<PlayerAction> actions)
@@ -646,7 +581,7 @@ namespace PokerTournament
         //Return -1 to fold
         //Return 0 to check/call
         //Return >0 to bet/raise
-        private int GetRound1Action(int opponentAction)
+        private int GetRound1Action(int opponentAction)//Pass -1 if we're going first, 0 if opponent checked, >0 for how much opponent bet/raised by
         {
             //Rate our hand
             Card highCard;
@@ -662,13 +597,11 @@ namespace PokerTournament
             //High pot odds and high hand strength -> bet/raise
             float potOdds = GetPotOdds();
 
-            Console.WriteLine("--- Pot odds are " + potOdds + "---");
-
             //If opponent bet/raised
             if (opponentAction > 0)
             {
                 //Bad hand
-                if(handRating <= 2)
+                if (handRating <= 2)
                 {
                     //Bad pot odds - fold unless we're bluffing
                     if (potOdds < handStrength)
@@ -684,22 +617,21 @@ namespace PokerTournament
                     }
                 }
                 //Decent hand - two pair or three of a kind
-                else if(handRating <= 4)
+                else if (handRating <= 4)
                 {
-                    
                     //If we have to pay over 75% of the pot's current value to stay in, the pot odds are bad
-                    if(potOdds < 0.25f)
+                    if (potOdds < 0.25f)
                     {
                         Console.WriteLine("\n--- Hand rating of " + handRating + " is decent but pot odds of " + potOdds + " are bad; will either bluff or fold ---\n");
                         //Consider bluffing but our hand probably isn't good enough so most likely fold
                         return BluffOrFold(handStrength);
                     }
                     //Pretty favorable pot odds, let's raise!
-                    else if(potOdds > 0.75f)
+                    else if (potOdds > 0.75f)
                     {
                         Console.WriteLine("\n--- Hand rating of " + handRating + " is decent and pot odds of " + potOdds + " are great; will raise ---\n");
                         //Bet slightly more conservatively though
-                        return GetBetAmount(5,15);
+                        return GetBetAmount(5, 15);
                     }
                     //Pot odds aren't awesome but why not give it a shot?
                     else
@@ -712,10 +644,10 @@ namespace PokerTournament
                 else
                 {
                     //If we have fairly favorable pot odds, keep things going
-                    if(potOdds > 0.5f)
+                    if (potOdds > 0.5f)
                     {
                         Console.WriteLine("\n--- Hand rating of " + handRating + " is good and pot odds of " + potOdds + " are fairly favorable; will raise ---\n");
-                        return GetBetAmount(10,20);
+                        return GetBetAmount(10, 20);
                     }
                     //If we have bad pot odds, this hand is still good, just call to stay in
                     else
@@ -729,7 +661,7 @@ namespace PokerTournament
             else
             {
                 //If our hand is fairly weak, check too unless we decide to bluff and spook them
-                if(handRating <= 2)
+                if (handRating <= 2)
                 {
                     Console.WriteLine("\n--- Hand rating of " + handRating + " isn't great; will either bluff or check ---\n");
 
@@ -740,44 +672,9 @@ namespace PokerTournament
                 else
                 {
                     Console.WriteLine("\n--- Hand rating of " + handRating + " is fairly good, especially since they checked; will bet ---\n");
-                    return GetBetAmount(10,20);
+                    return GetBetAmount(10, 20);
                 }
             }
-
-            /*
-            //If we have a bad hand, there'll be small chance to bluff but more often just check as well
-            if(!isBluffing && handRating < 2)
-            {
-                //Randomly decide whether to bluff
-                if(rand.NextDouble()/2 > handStrength)
-                {
-                    isBluffing = true;//Start bluffing the rest of this game
-                    int amt = rand.Next(10, 21);//Bet between 10 and 20 to bluff
-
-                    //NOTE: Figure out how to factor in pot odds
-
-                    ++numTimesRaised;
-                    //If bet amt would leave us unable to afford ante next round, just check and pray
-                    if (amt < Money - currentRound.Ante)
-                        return amt;
-                }
-                //Fold if opponent is raising and we're not bluffing
-                else if (opponentAction > 0)
-                    return -1;
-
-                //If we're going first or opponent checked, just check/call
-                return 0;
-            }
-            //If hand is better...
-            else
-            {
-                //If we've already gone through two cycles of raising, call to end it there
-                if(numTimesRaised++ >= 2)
-                    return 0;
-
-                //If our hand is okay, let's raise
-                return (int)(handStrength * rand.Next(10, 21));
-            }*/
         }
 
         //Return -1 to fold
@@ -789,155 +686,241 @@ namespace PokerTournament
             Card highCard;
             int handRating = Evaluate.RateAHand(Hand, out highCard);
 
+            //Strength based on likelihood of hand occurring
+            float handStrength = GetHandStrength();
+
+            //Get pot odds - ratio of how much you'd have to pay to stay in vs potential payout
+            //Low pot odds and low hand strength -> fold/bluff
+            //Low pot odds and high hand strength -> call/check
+            //High pot odds and low hand strength -> call/check
+            //High pot odds and high hand strength -> bet/raise
+            float potOdds = GetPotOdds();
+
             //If they checked and we also have bad hand, check as well
-            if(opponentAction == 0 && handRating < 2)
+            if (opponentAction == 0)
             {
-                //If bluffing, randomly bet based on high card value
-                if (isBluffing)
+                //Bad hand and not bluffing - just check and see how things go
+                if (handRating <= 2 && !isBluffing)
                 {
-                    //Pick random amount based on high card val
-                    int amt = rand.Next(highCard.Value, highCard.Value * 2);
-
-                    //If bet amt would leave us unable to afford ante next round, just check and pray
-                    if (amt < Money - currentRound.Ante)
-                        return amt;                    
+                    Console.WriteLine("\n--- Hand rating of " + handRating + " is bad but theirs probably is too; will check ---\n");
+                    return 0;
                 }
+                //Decent hand and they checked? Let's apply pressure
+                else
+                {
+                    if(isBluffing)
+                        Console.WriteLine("\n--- Hand rating of " + handRating + " is bad but we're bluffing - will apply some pressure for them to fold; will bet ---\n");
+                    else
+                        Console.WriteLine("\n--- Hand rating of " + handRating + " is good and they checked - will apply some pressure for them to fold; will bet ---\n");
 
-                //Default to checking - folding will just lose us money at this point
-                return 0;              
-            }
-            //If opponent is trying to raise and we've already done it twice, that's enough, just call to end
-            else if(opponentAction > 0 && numTimesRaised >= 2)
-            {
-                return 0;
+                    return GetBetAmount(15, 25);
+                }
             }
 
-            //Determine what to do based on how many cards opponent discarded in draw phase
+            //If responding to bet/raise, determine what to do based on how many cards opponent discarded in draw phase
             switch(currentRound.NumCardsOpponentDiscarded)
             {
                 //They stood pat... Likely have a strong hand but could be bluffing
                 case 0:
-                    //If we have a full house or better, let's go for it!
+                    Console.WriteLine("\n--- They stood pat; likely have a straight or better unless bluffing ---");
+
+                    //If we have a straight or better, let's go for it!
                     //Bet/raise, limit raising back and forth to two times before calling to end the round
-                    if (handRating >= 7)
+                    if (handRating >= 5)
                     {
-                        ++numTimesRaised;
-
-                        int amt = rand.Next(10, 21);//Bet between 10 and 20
-
-                        //If bet amt would leave us unable to afford ante next round, just check and pray
-                        if (amt < Money - currentRound.Ante)
-                            return amt;
+                        //If hand or pot odds are favorable, bet aggressively
+                        if (handRating >= 7 || potOdds > 0.75f)
+                        {
+                            Console.WriteLine("--- Hand rating of " + handRating + " is great or pot odds of " + potOdds + " are great; will raise aggressively ---\n");
+                            return GetBetAmount(15, 30);
+                        }
+                        //If pot odds are less favorable, bet slightly more conservatively
+                        else if(potOdds > 0.5f)
+                        {
+                            Console.WriteLine("--- Hand rating of " + handRating + " is good but pot odds of " + potOdds + " aren't amazing; will raise conservatively ---\n");
+                            return GetBetAmount(10, 20);
+                        }
+                        //Never fold in this scenario
+                        else
+                        {
+                            Console.WriteLine("--- Hand rating of " + handRating + " is good but pot odds of " + potOdds + " aren't amazing; will call ---\n");
+                            return 0;
+                        }
                     }
-                    //If hand isn't good enough to be confident against a hand that justifies standing pat
-                    //and opponent is raising, nope out of there and fold
-                    else if(handRating <= 4 && opponentAction > 0)
+                    //If our hand is a three of a kind, only stick with it if we've got really good pot odds
+                    else if(handRating == 4 && potOdds > 0.7f)
                     {
+                        Console.WriteLine("--- Hand rating of " + handRating + " isn't ideal but pot odds are favorable; will call ---\n");
+                        return 0;
+                    }
+                    //If hand isn't good enough to be confident against a hand that justifies standing pat, nope out of there and fold
+                    else
+                    {
+                        Console.WriteLine("--- Hand rating of " + handRating + " isn't good enough to justify staying in; will fold ---\n");
                         return -1;
                     }
-                    //Otherwise, if our hand is a straight or better or opponent called/checked, just call/check to stay in and see where it goes
                     break;
                 //They discarded one... Likely indicates a 2 pair
                 case 1:
+                    Console.WriteLine("\n--- They discarded 1 card; likely have a 2 pair ---");
                     //If hand is a straight or better, we should be good - bet/raise
-                    if(handRating >= 5)
+                    if (handRating >= 5)
                     {
-                        ++numTimesRaised;
-
-                        int amt = rand.Next(10, 21);//Bet between 10 and 20
-
-                        //If bet amt would leave us unable to afford ante next round, just check and pray
-                        if (amt < Money - currentRound.Ante)
-                            return amt;
+                        Console.WriteLine("--- Hand rating of " + handRating + " is great; will raise ---\n");
+                        //Bet relatively aggressively
+                        return GetBetAmount(15,25);
                     }
-                    
-                    //If opponent is raising and we have a weaker hand, fold unless we have a strong 2 pair
-                    else if (handRating <= 3 && opponentAction > 0)
+                    //Three of a kind, probably better than them but tread lightly
+                    else if(handRating == 4)
                     {
-                        //If we have a 2 pair, evaluate how strong it is - if our high pair is King/Ace, let's give it a shot
-                        if(handRating == 3 && GetValueOfHighestPair() > 12)
+                        //If pot odds are favorable, raise
+                        if(potOdds > 0.75f)
                         {
+                            Console.WriteLine("--- Hand rating of " + handRating + " is likely good enough and pot odds are favorable; will raise ---\n");
+                            //Bet conservatively
+                            return GetBetAmount(5,15);
+                        }
+                        //Otherwise, call
+                        else
+                        {
+                            Console.WriteLine("--- Hand rating of " + handRating + " is likely good enough; will call ---\n");
                             return 0;
                         }
-
-                        //If hand is worse than a 2 pair or a bad 2 pair, we're donezo - fold
+                    }
+                    //If we have a 2 pair, only stick with it if we have a strong high pair
+                    else if(handRating == 3)
+                    {
+                        //If we have a strong 2 pair (Aces/Kings) or favorable pot odds, call
+                        if(GetValueOfHighestPair() > 12 || potOdds > 0.75f)
+                        {
+                            Console.WriteLine("--- Hand rating of " + handRating + " isn't ideal but pairs are strong or pot odds of " + potOdds + " are favorable ---\n");
+                            return 0;
+                        }
+                        //Otherwise, fold
+                        else
+                        {
+                            Console.WriteLine("--- Hand rating of " + handRating + " isn't good enough to justify staying in; will fold ---\n");
+                            return -1;
+                        }
+                    }
+                    //If worse than a 2 pair, we don't have a chance - fold
+                    else
+                    {
+                        Console.WriteLine("--- Hand rating of " + handRating + " isn't good enough to justify staying in; will fold ---\n");
                         return -1;
                     }
-                    //Otherwise, we probably have a shot - call/check to stay in
                     break;
                 //They discarded two... Likely indicates a 3 pair
                 case 2:
+                    Console.WriteLine("\n--- They discarded 2 cards; likely have a 3 pair ---");
                     //If hand is a straight or better, we're in a good place - bet/raise
                     if (handRating >= 5)
                     {
-                        ++numTimesRaised;
-
-                        int amt = rand.Next(10, 21);//Bet between 10 and 20
-
-                        //If bet amt would leave us unable to afford ante next round, just check and pray
-                        if (amt < Money - currentRound.Ante)
-                            return amt;
+                        Console.WriteLine("--- Hand rating of " + handRating + " is great; will raise ---\n");
+                        return GetBetAmount(15, 25);
                     }
-                    //If hand is worse than a 3 pair and opponent wants to raise, pack it up and go home
-                    else if (handRating <= 3 && opponentAction > 0)
+                    //If hand is a 3 pair, call or raise if pot odds are good
+                    else if(handRating == 4)
                     {
+                        //If pot odds are favorable, raise
+                        if (potOdds > 0.75f)
+                        {
+                            Console.WriteLine("--- Hand rating of " + handRating + " is likely good enough and pot odds are favorable; will raise ---\n");
+                            //Bet conservatively
+                            return GetBetAmount(5, 15);
+                        }
+                        //Otherwise, call
+                        else
+                        {
+                            Console.WriteLine("--- Hand rating of " + handRating + " is likely good enough; will call ---\n");
+                            return 0;
+                        }
+                    }
+                    //If hand is worse than a 3 pair, pack it up and go home
+                    else
+                    {
+                        Console.WriteLine("--- Hand rating of " + handRating + " is likely not good enough; will fold ---\n");
                         return -1;
                     }
-                    //Otherwise, it's worth a try - call/check to stay in
                     break;
                 //They discarded three... Likely indicates the best they have is a one pair
                 case 3:
+                    Console.WriteLine("\n--- They discarded 3 cards; likely have a 1 pair ---");
                     //If hand is a straight or better, bet/raise
-                    if(handRating >= 4)
+                    if (handRating >= 3)
                     {
-                        ++numTimesRaised;
-
-                        int amt = rand.Next(15, 26);//Bet between 15 and 26
-
-                        //If bet amt would leave us unable to afford ante next round, just check and pray
-                        if (amt < Money - currentRound.Ante)
-                            return amt;
+                        Console.WriteLine("--- Hand rating of " + handRating + " is great; will raise ---\n");
+                        //Bet aggressively
+                        return GetBetAmount(10, 20);
                     }
                     //If hand is a one pair and opponent is trying to raise, fold if our pair is low
-                    else if(handRating <= 2 && opponentAction > 0)
+                    else if(handRating == 2)
                     {
                         //If our pair is Kings/Aces, call
-                        if(handRating == 2 && GetValueOfHighestPair() > 12)
+                        if(GetValueOfHighestPair() > 12 || potOdds > 0.75f)
                         {
+                            Console.WriteLine("--- Hand rating of " + handRating + " is okay; will call ---\n");
                             return 0;
                         }
                         //Otherwise I don't like our odds, let's fold
                         else
                         {
+                            Console.WriteLine("--- Hand rating of " + handRating + " and pot odds of " + potOdds + " aren't good enough; will fold ---\n");
                             return -1;
                         }
                     }
-                    //Otherwise, we'll stay in and call/check
+                    //If only have high card, fold
+                    else
+                    {
+                        Console.WriteLine("--- Hand rating of " + handRating + " is bad; will fold ---\n");
+                        return -1;
+                    }
                     break;
                 //They discarded 4/5... Their hand is probably a trainwreck
                 default:
+                    Console.WriteLine("\n--- They discarded 4/5 cards; likely have a bad hand ---");
                     //If hand is a two pair or better, bet/raise
                     //This is also a pretty safe environment for bluffing so why not give it a go!
-                    if(handRating >= 3 || isBluffing)
+                    if (handRating >= 3 || isBluffing)
                     {
-                        ++numTimesRaised;
-                        int amt = rand.Next(15, 26);//Bet between 15 and 25
-
-                        //If bet amt would leave us unable to afford ante next round, just check and pray
-                        if (amt < Money - currentRound.Ante)
-                            return amt;
+                        Console.WriteLine("--- Hand rating of " + handRating + " is good or currently bluffing; will call ---\n");
+                        return GetBetAmount(15, 25);
                     }
-                    //If hand is only a one pair, fold if pair is low
-                    else if(handRating <= 2 && opponentAction > 0)
+                    //If hand is only a one pair, call if pair is low
+                    else if(handRating == 2)
                     {
-                        //Call/check if pair is King or better
-                        if(handRating == 2 && GetValueOfHighestPair() > 12)
+                        //If have a high one pair or good pot odds, raise
+                        if(GetValueOfHighestPair() > 10 || potOdds > 0.75f)
                         {
+                            Console.WriteLine("--- Hand rating of " + handRating + " is okay or pot odds of " + potOdds + " are good; will raise ---\n");
+                            return GetBetAmount(5,15);
+                        }
+                        //Call if we have a bad pair and bad pot odds
+                        else if(potOdds > 0.5f)
+                        {
+                            Console.WriteLine("--- Hand rating of " + handRating + " is okay and pot odds of " + potOdds + " are okay; will call ---\n");
                             return 0;
                         }
-                        //Fold if we have a bad pair
-                        else 
+                        //Fold if pot odds are bad too
+                        else
                         {
+                            Console.WriteLine("--- Hand rating of " + handRating + " is bad and pot odds of " + potOdds + " is bad; will fold ---\n");
+                            return -1;
+                        }
+                    }
+                    //If hand is only a high card, fold unless odds are good
+                    else
+                    {
+                        //Call if have a high ace or favorable pot odds
+                        if(highCard.Value == 14 || potOdds > 0.8f)
+                        {
+                            Console.WriteLine("--- Hand rating of " + handRating + " is bad but have an Ace or pot odds of " + potOdds + " is good; will call ---\n");
+                            return 0;
+                        }
+                        //Otherwise, fold
+                        else
+                        {
+                            Console.WriteLine("--- Hand rating of " + handRating + " is bad and pot odds of " + potOdds + " is bad; will fold ---\n");
                             return -1;
                         }
                     }
@@ -945,8 +928,6 @@ namespace PokerTournament
                     break;
             }
 
-            //Call/check by default
-            return 0;
         }
 
     }
