@@ -8,10 +8,8 @@ namespace PokerTournament
 {
     class Player4 : Player
     {
-        Random rand;//Random number generator to determine what actions are taken based on confidence probability
-        float confidence;//Number between 0-1 that represents confidence that have winning hand
+        Random rand;//Random number generator to occasionally randomly determine an outcome
 
-        int currentRoundNumber;//Number of the round we're currently on
         int opponentMoney;//Keeps track of how much money the opponent has
 
         int numTimesRaised;//Keep track of number of times we've raised
@@ -20,10 +18,7 @@ namespace PokerTournament
         int bluffChance;
 
         Round currentRound;//Object keeps track of important info about this round
-        
-         //bet2 vars
-        int oppHandVal, oppDiscards, actionCount;
-        bool firstTurn = true; //reset every round somehow (in bet1?)
+       
 
         float[] handProbability = {
             0.5f,//0 - high card, 50% chance of occurring
@@ -50,7 +45,6 @@ namespace PokerTournament
         {
             currentRound.AdvanceRound();
             isBluffing = false;
-            bluffChance = 0;
             numTimesRaised = 0;
         }
 
@@ -138,9 +132,36 @@ namespace PokerTournament
             int handVal = Evaluate.RateAHand(Hand, out highCard);
             Evaluate.SortHand(Hand);
 
+            //If bluffing, get rid of up to two of our lowest cards so it looks like we still have a decent hand
+            if(isBluffing)
+            {
+                discardCardsLocs = FindDiscardIndex();
+
+                int numDiscarded = 0;
+
+                foreach(int card in discardCardsLocs)
+                {
+                    if (Hand[card].Value <= 10)
+                    {
+                        ++numDiscarded;
+                        Hand[card] = null;
+                    }
+
+                    if (numDiscarded >= 2)
+                        break;
+                }
+
+                if (numDiscarded == 0)
+                    drawDecision = new PlayerAction(Name, "Draw", "stand pat", 0);
+                else
+                    drawDecision = new PlayerAction(Name, "Draw", "draw", numDiscarded);
+
+                return drawDecision;
+            }
+
             //start from the top
             //straight and up = stand pat
-            if (isBluffing || handVal >= 5)
+            if (handVal >= 5)
             {
                 drawDecision = new PlayerAction(Name, "draw", "stand pat", 0);
                 return drawDecision;
@@ -247,6 +268,8 @@ namespace PokerTournament
             PlayerAction lastOpponentAction = actions.Last();
             PlayerAction threeActsAgo = actions[actions.Count - 3];
 
+            string lastActionName = lastOpponentAction.ActionName.ToLower();
+
             int round2Result;//Result that determines what action to take this round
 
             //If we haven't figured out how many cards the opponent discarded yet, this is our first time in round 2
@@ -258,7 +281,7 @@ namespace PokerTournament
                 if (lastOpponentAction.ActionPhase.ToLower().Equals("draw"))
                 {
                     //Store number of cards discarded
-                    if (lastOpponentAction.ActionName.ToLower().Equals("draw"))
+                    if (lastActionName.Equals("draw"))
                         currentRound.StoreNumCardsDiscarded(lastOpponentAction.Amount);
                     else
                         currentRound.StoreNumCardsDiscarded(0);
@@ -283,7 +306,7 @@ namespace PokerTournament
                         currentRound.StoreNumCardsDiscarded(0);
 
                     //Get action to take
-                    if (lastOpponentAction.ActionName.ToLower().Equals("check"))
+                    if (lastActionName.Equals("check"))
                     {
                         //Get action based on fact they checked
                         round2Result = GetRound2Action(0);
@@ -331,57 +354,6 @@ namespace PokerTournament
 
             }
         }
-        
-         private int GetOpponentDiscards(List<PlayerAction> actions)
-        {
-            if(actions[actionCount].ActionPhase == "draw" && actions[actionCount].Name != Name)//draw phase + not your turn (this applies if you drew first)
-            {
-                //this is the opponents last drawing phase
-                return actions[actionCount].Amount;
-            }
-            else //they drew first
-            {
-                return actions[actionCount - 2].Amount;
-            }
-        }
-
-        private void EvaluateOpponentsHand() //numbers should be scaled to match bet1 confidence scale
-        {
-            switch(oppDiscards)
-            {
-                case 0: //opponent did not discard (probably a very good hand)
-                    oppHandVal = 10;
-                    break;
-                case 1: //opponent has either 2 pair or 4 of a kind
-                    oppHandVal = 8; //or 3?
-                    break;
-                case 2: //opponent has 3 of a kind
-                    oppHandVal = 4;
-                    break;
-                case 3: //opponent has a pair
-                    oppHandVal = 2;
-                    break;
-                case 4: //opponent discarded all but their high card (so it might be decently high)
-                    oppHandVal = 1;
-                    break;
-                default: //errors or all discarded
-                    oppHandVal = 0;
-                    break;
-            }
-
-            firstTurn = false;
-        }
-
-        /*//Randomly determine what to bet based on confidence
-        private int GetAmountToBet()
-        {
-            //Absolute max is 25 when at max confidence
-            int betAmt = rand.Next(1, (int)(25 * confidence));
-
-            betAmt = Math.Min(betAmt, Money - currentRound.OpponentBetAmt-currentRound.PlayerBetAmt);
-
-            return betAmt;
-        }*/
 
         //Calculate confidence in hand
         private float GetHandStrength()
@@ -560,9 +532,8 @@ namespace PokerTournament
         //Return >0 if bluffing to bet/raise
         private int BluffOrFold(float handStrength)
         {
-            //Randomly decide whether to bluff
-            //Should be relatively rare
-            if (rand.Next(1, 31) < bluffChance)
+            //Randomly decide whether to bluff, chances of doing it will increase over time
+            if (rand.Next(1, 11) < bluffChance)
             {
                 isBluffing = true;//Start bluffing the rest of this game
                 bluffChance = 0;//Reset chance of bluffing next time
@@ -708,7 +679,7 @@ namespace PokerTournament
                 //Decent hand and they checked? Let's apply pressure
                 else
                 {
-                    if(isBluffing)
+                    if (isBluffing)
                         Console.WriteLine("\n--- Hand rating of " + handRating + " is bad but we're bluffing - will apply some pressure for them to fold; will bet ---\n");
                     else
                         Console.WriteLine("\n--- Hand rating of " + handRating + " is good and they checked - will apply some pressure for them to fold; will bet ---\n");
