@@ -618,7 +618,7 @@ namespace PokerTournament
                     if (potOdds > 0.5f)
                     {
                         Console.WriteLine("\n--- Hand rating of " + handRating + " is good and pot odds of " + potOdds + " are fairly favorable; will raise ---\n");
-                        return GetBetAmount(10, 20);
+                        return GetBetAmount(15, 25);
                     }
                     //If we have bad pot odds, this hand is still good, just call to stay in
                     else
@@ -640,9 +640,15 @@ namespace PokerTournament
                     return Math.Max(BluffOrFold(handStrength), 0);
                 }
                 //Otherwise our hand is good! Let's bet!
+                else if(opponentAction == 0 || handRating >= 5)
+                {
+                    Console.WriteLine("\n--- Hand rating of " + handRating + " is good, especially since they checked; will bet aggressively ---\n");
+                    return GetBetAmount(20, 30);
+                }
+                //Otherwise we're going first and our hand isn't incredible, just bet conservatively
                 else
                 {
-                    Console.WriteLine("\n--- Hand rating of " + handRating + " is fairly good, especially since they checked; will bet ---\n");
+                    Console.WriteLine("\n--- Hand rating of " + handRating + " is fairly good; will bet conservatively ---\n");
                     return GetBetAmount(10, 20);
                 }
             }
