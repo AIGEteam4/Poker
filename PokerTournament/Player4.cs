@@ -146,150 +146,121 @@ namespace PokerTournament
         //Actions for draw round
         public override PlayerAction Draw(Card[] hand)
         {
-                       //Discard List
-            List<int> discardList = new List<int>();
+              //return var
+            PlayerAction drawDecision;
 
-            //Check if lower than a straight
-            if(hand.Rank <= 4)
+            Evaluate.ListHand(Hand);
+
+            //cards to discard
+            List<int> discardCardsLocs = new List<int>();
+
+            //player hand values
+            Card highCard = null;
+            int handVal = Evaluate.RateAHand(Hand, out highCard);
+            Evaluate.SortHand(Hand);
+
+            //start from the top
+            //straight and up = stand pat
+            if (handVal >= 5)
             {
-                //Evaluate straights or flushes in the hand
-                KeyValuePair<int, int> consecutiveSet = HighestConsecutiveSet();
-
-                Dictionary<string, int> cardsPerSuite = CardsPerSuite();
-
-                //Determine probabilities of finishing a straight
-                int amountForStraight = 5 - consecutiveSet.Value;
-                float straightChance = 4.0f / (amountForStraight * 42.0f);
-
-                //Determine probabilities of finishing a flush
-                float flushChance = 0.0f; 
-
-                foreach(KeyValuePair<string, int> pair in cardsPerSuite)
-                {
-                    //Reasonable chance to get a flush
-                    if(cardsPerSuite[pair.Key] >= 3)
-                    {
-                        if(cardsPerSuite[pair.Key] == 3)
-                            flushChance = 0.125f;  //1 in 8 chance : does not account for less cards in deck
-                        else
-                            flushChance = 0.25f;  //1 in 4 chance : does not account for less cards in deck
-                    }
-                }
-                //2 or less cards of same suite, too low of a chance to consider
-                if(flushChance == 1.0f)
-                    flushChance = 0.007f;
-
-                //Discard logic here
-
-                
-
-                //Set up discard list
-                switch(hand.Rank)
-                {
-                    //High card
-                    case 1:
-
-                        //Should it try for a flush or try for a straight?
-                        if(flushChance > 0.125f)
-                        {
-                            foreach(KeyValuePair<string, int> pair in cardsPerSuite)
-                            {
-                                if(cardsPerSuite[pair.Key] >= 3)
-                                {
-                                    for(int i = 0; i < 5; i++)
-                                    {
-                                        if(hand[i].Suit != pair.Key)
-                                            discardList.Add(i);
-                                    }
-                                }
-                            }
-                        }
-                        else if(straightChance >= 0.09)
-                        {
-                            //Discard the card not consecutive
-                            for(int i = 0; i < hand.Count(); i++)
-                            {
-                                int count = Evaluate.ValueCount(i, Hand);
-                                if(count == 1)
-                                {
-                                    discardList.Add(i);
-                                    break;
-                                }
-                            }
-                        }
-                        else
-                        {
-                            //Discard
-                            for(int i = 0; i < 5; i++)
-                            {
-                                discardList.Add(i);
-                            }
-                        }
-                        //Bluff?
-
-                        break;
-                    //One Pair
-                    case 2:
-
-                        //Should it try for a flush or try for a straight?
-
-
-                        //Bluff?
-
-                        //Discard the cards not in the pair
-                        for(int i = 0; i < hand.Count(); i++)
-                        {
-                            int count = Evaluate.ValueCount(i, Hand);
-                            if(count == 1)
-                                discardList.Add(i);
-                        }
-                        
-                        break;
-                    //Two Pair
-                    case 3:
-                        //Discard the card not in a pair
-                        for(int i = 0; i < hand.Count(); i++)
-                        {
-                            int count = Evaluate.ValueCount(i, Hand);
-                            if(count == 1)
-                                discardList.Add(i);
-                        }
-                        break;
-                    //3 of a kind
-                    case 4:
-                        //Discard
-                        if(consecutiveSet.Key != 0)
-                        {
-                            //High card is in 3 of a kind
-                            if(consecutiveSet.Key + 3 == 4)
-                            {
-                                discardList.Add(0);
-                                discardList.Add(1);
-                            }
-                            else
-                            {
-                                discardList.Add(0);
-                                discardList.Add(4);
-                            }
-                        }
-                        //Low 3 of a kind
-                        else if(consecutiveSet.Key == 0)
-                        {
-                            discardList.Add(3);
-                            discardList.Add(4);
-                        }
-                        break;
-                }
-
-                //Discard any cards
-                for(int i = 0; i < discardList.Count(); i++)
-                {
-                    hand[discardList[i]] = null;
-                }
-                        
+                drawDecision = new PlayerAction(Name, "draw", "stand pat", 0);
+                return drawDecision;
             }
 
-            return new PlayerAction(Name, "Draw", "draw", discardList.Count());
+            //
+            // use logan's straight/flush probabilities to determine if the risk is low enough
+            // if(risk low)
+            // {
+            //      //discard necessary cards
+            // }
+            //
+
+            //3 Of A Kind
+            if (handVal == 4)
+            {
+                //find the two other cards location in hand
+                discardCardsLocs = FindDiscardIndex();
+
+                //set those to null
+                foreach (int card in discardCardsLocs)
+                {
+                    Hand[card] = null;
+                }
+
+                //return
+                drawDecision = new PlayerAction(Name, "draw", "draw", 2);
+                return drawDecision;
+            }
+
+            //2 Pair
+            if (handVal == 3)
+            {
+                //find the last card
+                discardCardsLocs = FindDiscardIndex();
+
+                //set it to null
+                foreach (int card in discardCardsLocs)
+                {
+                    Hand[card] = null;
+                }
+
+                //return
+                drawDecision = new PlayerAction(Name, "draw", "draw", 1);
+                return drawDecision;
+            }
+
+            //1 Pair
+            if (handVal == 2)
+            {
+                //consider flush/straight odds again, if odds meet a more lenient risk value go for it
+
+                //else, find last 3
+                discardCardsLocs = FindDiscardIndex();
+
+                //set to null
+                foreach (int card in discardCardsLocs)
+                {
+                    Hand[card] = null;
+                }
+
+                //return
+                drawDecision = new PlayerAction(Name, "draw", "draw", 3);
+                return drawDecision;
+            }
+
+            //HighCard
+            else
+            {
+                //flush/straight odds  again, if odds meet a more lenient risk value go for it
+
+                //check highcard value
+                int highVal = highCard.Value;
+
+                //if its high discard other 4
+                if (highVal >= 10)
+                {
+                    for (int i = 0; i < 4; i++)
+                    {
+                        Hand[i] = null; //highcard is last in array
+                    }
+
+                    //return
+                    drawDecision = new PlayerAction(Name, "draw", "draw", 4);
+                    return drawDecision;
+                }
+                else //if its low discard all or bluff (discard 1)
+                {
+                    for (int i = 0; i < 5; i++)
+                    {
+                        Hand[i] = null;
+                    }
+
+                    //return
+                    drawDecision = new PlayerAction(Name, "draw", "draw", 5);
+                    return drawDecision;
+                }
+            }
+
         }
 
         //Implemented by Mark Scott
@@ -486,6 +457,24 @@ namespace PokerTournament
             }
 
             return strength;//Return strength as float
+        }
+         private List<int> FindDiscardIndex()
+        {
+            //find cards w/o matches
+            List<int> returnList = new List<int>();
+
+            for (int i = 0; i < 5; i++)
+            {
+                //check value count for each card in hand
+                int count = Evaluate.ValueCount(Hand[i].Value, Hand);
+
+                //no match
+                if (count <= 1)
+                {
+                    returnList.Add(i); //index of card
+                }
+            }
+            return returnList;
         }
 
         //Look at the ratio for how much you'll have to pay vs the potential payout if you win
