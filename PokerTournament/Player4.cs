@@ -54,6 +54,8 @@ namespace PokerTournament
         //Actions for betting round 1
         public override PlayerAction BettingRound1(List<PlayerAction> actions, Card[] hand)
         {
+            int round1Result;
+
             //confidence = GetHandStrength();//Get confidence for current hand
 
             //If they're going first, get their action so we can factor that in
@@ -67,65 +69,19 @@ namespace PokerTournament
 
                 PlayerAction opponentAction = actions.Last();
 
-                int oppBetAmt = 0;//How much opponent just bet
+                string actionName = opponentAction.ActionName.ToLower();
 
-                //If the opponent bet/raised, determine whether to call, raise, or fold
-                //Calling will end the betting round
-                //Raising will send it back around to the opponent
-                //Folding will obviously mean we lose
-                if (opponentAction.ActionName == "bet" || opponentAction.ActionName == "raise")
-                {
-                    oppBetAmt = opponentAction.Amount;
-                    opponentMoney -= oppBetAmt;
-                    currentRound.AddOpponentBet(oppBetAmt);
+                if (actionName.Equals("bet") || actionName.Equals("raise"))
+                    round1Result = GetRound1Action(opponentAction.Amount);
+                else
+                    round1Result = GetRound1Action(0);
 
-                    //How much have they bet? Would the amount of money we'd have to pay to match them be worth the risk?
-                    float potOdds = GetPotOdds(oppBetAmt);
-
-                    //If we don't have enough money to match, fold
-                    //Otherwise, if the pot odds are bad and our confidence is low, randomly decide whether we're going to fold based on confidence
-                    //Lower confidence = more likely to fold
-                    if (oppBetAmt > Money || (potOdds - confidence > 0.5f && rand.NextDouble() > confidence))
-                    {
-                        return new PlayerAction(Name, "Bet1", "fold", 0);
-                    }
-                    //We're staying in! Random chance of only calling based on confidence
-                    else if (rand.NextDouble() > confidence)
-                    {
-                        return new PlayerAction(Name, "Bet1", "call", 0);
-                    }
-                    //If not folding or calling, raise
-                    else
-                    {
-                        //Get amount to raise by as random number between 0 and absolute max of 25
-                        //Varies based on confidence rating
-                        int betAmt = GetAmountToBet();
-
-                        return new PlayerAction(Name, "Bet1", "raise", betAmt);
-                    }
-                }
-                //The only other option is that they're checking
-                else//opponentAction.ActionName == "check"
-                {
-                    //Wow, they checked right off the bat?
-                    //Increase confidence by 10% because they probably have a bad hand
-                    confidence = Math.Min(1f, confidence * 1.1f);
-
-                    //Definitely don't fold! Decide whether to check as well or raise
-                    if (rand.NextDouble() > confidence)
-                    {
-                        return new PlayerAction(Name, "Bet1", "check", 0);
-                    }
-                    //If not folding or calling, raise
-                    else
-                    {
-                        //Get amount to raise by as random number between 0 and absolute max of 25
-                        //Varies based on confidence rating
-                        int betAmt = GetAmountToBet();
-
-                        return new PlayerAction(Name, "Bet1", "bet", betAmt);
-                    }
-                }
+                if (round1Result < 0)
+                    return new PlayerAction(Name, "Bet1", "fold", 0);
+                else if (round1Result == 0)
+                    return new PlayerAction(Name, "Bet1", "check", 0);
+                else
+                    return new PlayerAction(Name, "Bet1", "bet", 0);
             }
             //If we're going first, will have to base decision entirely off of hand strength
             //Can check, bet, or fold
@@ -133,31 +89,25 @@ namespace PokerTournament
             {
                 NewRound();//Start new round
 
-                //Determine what to do, we're going first
-                if (rand.NextDouble() > confidence)
-                {
-                    return new PlayerAction(Name, "Bet1", "check", 0);
-                }
-                //If not folding or checking, bet
-                //Get amount to bet as random number between 0 and absolute max of 25
-                //Varies based on confidence rating
-                else
-                {
-                    int betAmt = GetAmountToBet();
+                round1Result = GetRound1Action(-1);
 
-                    return new PlayerAction(Name, "Bet1", "bet", betAmt);
-                }      
+                if (round1Result < 0)
+                    return new PlayerAction(Name, "Bet1", "fold", 0);
+                else if (round1Result == 0)
+                    return new PlayerAction(Name, "Bet1", "check", 0);
+                else
+                    return new PlayerAction(Name, "Bet1", "bet", 0);
             }
         }
 
         //Actions for draw round
         public override PlayerAction Draw(Card[] hand)
         {
-                       //Discard List
+            //Discard List
             List<int> discardList = new List<int>();
 
             //Check if lower than a straight
-            if(hand.Rank <= 4)
+            if(!isBluffing && hand.Rank <= 4)
             {
                 //Evaluate straights or flushes in the hand
                 KeyValuePair<int, int> consecutiveSet = HighestConsecutiveSet();
@@ -309,6 +259,8 @@ namespace PokerTournament
             //If we haven't figured out how many cards the opponent discarded yet, this is our first time in round 2
             if(currentRound.NumCardsOpponentDiscarded < 0)
             {
+                numTimesRaised = 0;
+
                 //If last action was in draw phase, we know we're going first this round and we can get num discarded from that action
                 if(lastOpponentAction.ActionPhase.ToLower().Equals("draw"))
                 {
@@ -519,9 +471,6 @@ namespace PokerTournament
             if(rating <= 1)
             {
                 conf *= (float)(highCard.Value-1) / 13;
-
-                if (rand.NextDouble()/2 > conf)
-                    isBluffing = true;
             }
 
             //If we have pairs, modify confidence by the strength of these pairs
@@ -529,8 +478,8 @@ namespace PokerTournament
             {
                 //rating - 1 = number of pairs
                 //Strength of pairs is value between 0-1, multiply it by the range between probability rating of this hand and the next worst hand
-                //Sssentially, a pair of 2s is only barely better than a high Ace, while a pair of Aces is almost as good as the worst three of a kind
-                conf += ((float)GetValueOfHighestPair()/13) * (handProbability[rating] - handProbability[rating - 1]);
+                //Essentially, a pair of 2s is only barely better than a high Ace, while a pair of Aces is almost as good as the worst three of a kind
+                conf += ((float)GetValueOfHighestPair()/14) * (handProbability[rating] - handProbability[rating - 1]);
             }
 
             return conf;
@@ -639,6 +588,7 @@ namespace PokerTournament
             return cardsPerSuite;
         }
 
+        //Return -1 to fold
         //Return 0 to check/call
         //Return >0 to bet/raise
         private int GetRound1Action(int opponentAction)
@@ -647,16 +597,43 @@ namespace PokerTournament
             Card highCard;
             int handRating = Evaluate.RateAHand(Hand, out highCard);
 
-            //If they checked and we also have a bad hand, there'll be small chance to bluff but more often just check as well
-            if(opponentAction == 0 && handRating < 2)
+            //Strength based on likelihood of hand occurring
+            float handStrength = GetHandStrength();
+
+            //If we have a bad hand, there'll be small chance to bluff but more often just check as well
+            if(!isBluffing && handRating < 2)
             {
-                if(rand.NextDouble() > GetHandStrength())
+                //Randomly decide whether to bluff
+                if(rand.NextDouble()/2 > handStrength)
                 {
+                    isBluffing = true;//Start bluffing the rest of this game
+                    int amt = rand.Next(10, 21);//Bet between 10 and 20 to bluff
 
+                    //NOTE: Figure out how to factor in pot odds
+
+                    ++numTimesRaised;
+                    //If bet amt would leave us unable to afford ante next round, just check and pray
+                    if (amt < Money - currentRound.Ante)
+                        return amt;
                 }
-            }
+                //Fold if opponent is raising and we're not bluffing
+                else if (opponentAction > 0)
+                    return -1;
 
-            return 0;
+                //If we're going first or opponent checked, just check/call
+                return 0;
+            }
+            //If hand is better...
+            else
+            {
+                //If we've already gone through two cycles of raising, call to end it there
+                if(opponentAction > 0 && numTimesRaised >= 2)
+                    return 0;
+
+                ++numTimesRaised;
+                //If our hand is okay, let's raise
+                return rand.Next(5, 16);
+            }
         }
 
         //Return -1 to fold
@@ -686,7 +663,7 @@ namespace PokerTournament
                 return 0;              
             }
             //If opponent is trying to raise and we've already done it twice, that's enough, just call to end
-            else if(opponentAction > 0 && numTimesRaised >= 1)
+            else if(opponentAction > 0 && numTimesRaised >= 2)
             {
                 return 0;
             }
@@ -701,7 +678,12 @@ namespace PokerTournament
                     if (handRating >= 7)
                     {
                         ++numTimesRaised;
-                        return rand.Next(10,21);//Bet between 10 and 20
+
+                        int amt = rand.Next(10, 21);//Bet between 10 and 20
+
+                        //If bet amt would leave us unable to afford ante next round, just check and pray
+                        if (amt < Money - currentRound.Ante)
+                            return amt;
                     }
                     //If hand isn't good enough to be confident against a hand that justifies standing pat
                     //and opponent is raising, nope out of there and fold
@@ -710,10 +692,6 @@ namespace PokerTournament
                         return -1;
                     }
                     //Otherwise, if our hand is a straight or better or opponent called/checked, just call/check to stay in and see where it goes
-                    else
-                    {
-                        return 0;
-                    }
                     break;
                 //They discarded one... Likely indicates a 2 pair
                 case 1:
@@ -721,7 +699,12 @@ namespace PokerTournament
                     if(handRating >= 5)
                     {
                         ++numTimesRaised;
-                        return rand.Next(10,21);//Bet between 10 and 20
+
+                        int amt = rand.Next(10, 21);//Bet between 10 and 20
+
+                        //If bet amt would leave us unable to afford ante next round, just check and pray
+                        if (amt < Money - currentRound.Ante)
+                            return amt;
                     }
                     
                     //If opponent is raising and we have a weaker hand, fold unless we have a strong 2 pair
@@ -744,7 +727,12 @@ namespace PokerTournament
                     if (handRating >= 5)
                     {
                         ++numTimesRaised;
-                        return rand.Next(10, 21);//Bet between 10-20
+
+                        int amt = rand.Next(10, 21);//Bet between 10 and 20
+
+                        //If bet amt would leave us unable to afford ante next round, just check and pray
+                        if (amt < Money - currentRound.Ante)
+                            return amt;
                     }
                     //If hand is worse than a 3 pair and opponent wants to raise, pack it up and go home
                     else if (handRating <= 3 && opponentAction > 0)
@@ -759,7 +747,12 @@ namespace PokerTournament
                     if(handRating >= 4)
                     {
                         ++numTimesRaised;
-                        return rand.Next(15, 26);//Bet between 15-25
+
+                        int amt = rand.Next(15, 26);//Bet between 15 and 26
+
+                        //If bet amt would leave us unable to afford ante next round, just check and pray
+                        if (amt < Money - currentRound.Ante)
+                            return amt;
                     }
                     //If hand is a one pair and opponent is trying to raise, fold if our pair is low
                     else if(handRating <= 2 && opponentAction > 0)
@@ -784,7 +777,11 @@ namespace PokerTournament
                     if(handRating >= 3 || isBluffing)
                     {
                         ++numTimesRaised;
-                        return rand.Next(15,26);
+                        int amt = rand.Next(15, 26);//Bet between 15 and 25
+
+                        //If bet amt would leave us unable to afford ante next round, just check and pray
+                        if (amt < Money - currentRound.Ante)
+                            return amt;
                     }
                     //If hand is only a one pair, fold if pair is low
                     else if(handRating <= 2 && opponentAction > 0)
