@@ -47,11 +47,7 @@ namespace PokerTournament
         //Actions for betting round 1
         public override PlayerAction BettingRound1(List<PlayerAction> actions, Card[] hand)
         {
-            Evaluate.SortHand(Hand);//Make sure hand is sorted
-
             confidence = GetHandConfidence();//Get confidence for current hand
-
-            //int maxBet = (int)(GetMaxBet() * confidence);//Maximum amt we're willing to bet... This probably isn't a good option right now
 
             //If they're going first, get their action so we can factor that in
             //Can call, raise, or fold
@@ -433,7 +429,11 @@ namespace PokerTournament
         private int GetAmountToBet()
         {
             //Absolute max is 25 when at max confidence
-            return rand.Next(1, (int)(25 * confidence));
+            int betAmt = rand.Next(1, (int)(25 * confidence));
+
+            betAmt = Math.Min(betAmt, Money - currentRound.OpponentBetAmt-currentRound.PlayerBetAmt);
+
+            return betAmt;
         }
 
         //Calculate confidence in hand
@@ -494,9 +494,6 @@ namespace PokerTournament
         {
             //Divide total pot by amount you need to spend to call
             //Invert percentage so that higher % is better
-            /*float test = currentRound.OpponentBetAmt - currentRound.PlayerBetAmt;
-            float test2 = test / currentRound.Pot;
-            float result =   (currentRound.OpponentBetAmt - currentRound.PlayerBetAmt) / currentRound.Pot;*/
             return 1 - ((float)opponentBetAmt / currentRound.Pot);
         }
 
